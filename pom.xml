@@ -32,16 +32,16 @@
       <version>4.5.1</version>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>kinetic-bridgehub-adapter</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>org.yaml</groupId>
       <artifactId>snakeyaml</artifactId>
       <version>1.16</version>
       <scope>test</scope>
       <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>kinetic-bridgehub-adapter</artifactId>
+      <version>1.0.1</version>
     </dependency>
   </dependencies>
   

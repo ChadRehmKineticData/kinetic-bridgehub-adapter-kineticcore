@@ -171,13 +171,13 @@ public class KineticCoreSubmissionHelper {
                 Object searchableField = searchableFields.get(fldIndex);
                 if (searchableField.getClass() == String.class) {
                     // If the field is a string, just do a simple retrieve and put
-                    record.put(fields.get(fldIndex),submission.get(searchableField.toString()));
+                    record.put(fields.get(fldIndex),toString(submission.get(searchableField.toString())));
                 } else if (searchableField.getClass() == ArrayList.class) {
                     // If the field is a list, iterate through the object until you
                     // find the result
                     List<String> multiLevelField = (ArrayList<String>)searchableField;
                     JSONObject jsonObject = (JSONObject)submission.get(multiLevelField.get(0));
-                    record.put(fields.get(fldIndex),jsonObject.get(multiLevelField.get(1)));
+                    record.put(fields.get(fldIndex), toString(jsonObject.get(multiLevelField.get(1))));
                 } else {
                     throw new BridgeError("There was an error with parsing the record object. Field type '"+searchableField.getClass()+"' is not valid.");
                 }
@@ -233,6 +233,26 @@ public class KineticCoreSubmissionHelper {
         
         return count;
     }
+    
+        /**
+       * Returns the string value of the object.
+       * <p>
+       * If the value is not a String, a JSON representation of the object will be returned.
+       * 
+       * @param value
+       * @return 
+       */
+    private String toString(Object value) {
+        String result = null;
+        if (value != null) {
+            if (String.class.isInstance(value)) {
+                result = (String)value;
+            } else {
+                result = JSONValue.toJSONString(value);
+            }
+        }
+        return result;
+     }
     
     private JSONObject searchSubmissions(BridgeRequest request) throws BridgeError {
         String[] indvQueryParts = request.getQuery().split("&");
