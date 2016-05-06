@@ -153,7 +153,7 @@ public class KineticCoreSubmissionHelper {
         for (String field : fields) {
             Matcher matcher = fieldPattern.matcher(field);
             if (matcher.find()) {
-                List<String> multiLevelField = new ArrayList<>();
+                List<String> multiLevelField = new ArrayList<String>();
                 multiLevelField.add(matcher.group(1));
                 multiLevelField.add(matcher.group(2));
                 searchableFields.add(multiLevelField);
@@ -163,10 +163,10 @@ public class KineticCoreSubmissionHelper {
         }
 
         // Go through the submissions in the JSONArray to create a list of records
-        List<Record> records = new ArrayList<>();
+        List<Record> records = new ArrayList<Record>();
         for (Object o : submissions) {
             JSONObject submission = (JSONObject)o;
-            Map<String,Object> record = new LinkedHashMap<>();
+            Map<String,Object> record = new LinkedHashMap<String,Object>();
             for (int fldIndex=0;fldIndex<fields.size();fldIndex++) {
                 Object searchableField = searchableFields.get(fldIndex);
                 if (searchableField.getClass() == String.class) {
@@ -195,7 +195,7 @@ public class KineticCoreSubmissionHelper {
         // Retrieving the slugs for the kapp and form slug that were passed in the query
         String kappSlug = null;
         String formSlug = null;
-        List<String> queryPartsList = new ArrayList<>();
+        List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
             String[] str_array = indvQueryPart.split("=");
             String field = str_array[0].trim();
@@ -261,7 +261,7 @@ public class KineticCoreSubmissionHelper {
         String kappSlug = null;
         String formSlug = null;
         String limit = null;
-        List<String> queryPartsList = new ArrayList<>();
+        List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
             String[] str_array = indvQueryPart.split("=");
             String field = str_array[0].trim();

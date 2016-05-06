@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.UUID;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 import org.junit.Test;
 
 /**
@@ -34,7 +33,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_invalidBridgeConfiguration() {
         BridgeError error = null;
         
-        Map<String,String> invalidConfiguration = new LinkedHashMap<>();
+        Map<String,String> invalidConfiguration = new LinkedHashMap<String,String>();
         invalidConfiguration.put("Username", "badUsername");
         invalidConfiguration.put("Password", "badPassword");
         invalidConfiguration.put("Kinetic Core Space Url","https://rcedev.kineticdata.com/kinetic/internal");
@@ -54,7 +53,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_invalidField() {
         BridgeError error = null;
         
-        List<String> invalidFields = new ArrayList<>();
+        List<String> invalidFields = new ArrayList<String>();
         UUID randomField = UUID.randomUUID();
         invalidFields.add(randomField.toString());
         

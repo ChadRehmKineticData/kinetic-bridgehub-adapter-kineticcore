@@ -130,10 +130,10 @@ public class KineticCoreUserHelper {
 
     private List<Record> createRecordsFromUsers(List<String> fields, JSONArray users) throws BridgeError {
         // Go through the users in the JSONArray to create a list of records
-        List<Record> records = new ArrayList<>();
+        List<Record> records = new ArrayList<Record>();
         for (Object o : users) {
             JSONObject user = (JSONObject)o;
-            Map<String,Object> record = new LinkedHashMap<>();
+            Map<String,Object> record = new LinkedHashMap<String,Object>();
             for (String field : fields) {
                 record.put(field,user.get(field));
             }
@@ -197,7 +197,7 @@ public class KineticCoreUserHelper {
         String[] indvQueryParts = query.split("&");
 
         // Retrieving the slugs for the kapp and form slug that were passed in the query
-        Map<String,Object[]> queryValues = new HashMap<>();
+        Map<String,Object[]> queryValues = new HashMap<String,Object[]>();
         for (String indvQueryPart : indvQueryParts) {
             String[] str_array = indvQueryPart.split("=");
             String field = str_array[0].trim();

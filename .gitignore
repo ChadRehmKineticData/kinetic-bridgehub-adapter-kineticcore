@@ -1,2 +1,2 @@
-/target
-*bridge-config.yml
+target/
+nb-configuration.xml
