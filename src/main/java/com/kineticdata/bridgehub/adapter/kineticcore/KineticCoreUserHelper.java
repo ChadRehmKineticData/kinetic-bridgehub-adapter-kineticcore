@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -40,7 +41,7 @@ public class KineticCoreUserHelper {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
-        this.attributePattern = Pattern.compile("attributes\\[(.*?)\\]");
+        this.attributePattern = Pattern.compile("attributes\\[\"(.*?)\"\\]");
     }
     
     public static final List<String> DETAIL_FIELDS = Arrays.asList(new String[] {
@@ -65,7 +66,7 @@ public class KineticCoreUserHelper {
             }
         }
         
-        if (username == null) {		
+        if (username == null) {
             throw new BridgeError(String.format("Invalid Query: Could not find username in the following query '%s'. Query must be in the form of username={username}",request.getQuery()));		
         }
 
@@ -128,14 +129,20 @@ public class KineticCoreUserHelper {
         return createRecordsFromUsers(fields,jsonArray).get(0);
     }
 
-    private List<Record> createRecordsFromUsers(List<String> fields, JSONArray users) throws BridgeError {
+    // Made protected and final for the purposes of testing
+    protected final List<Record> createRecordsFromUsers(List<String> fields, JSONArray users) throws BridgeError {
         // Go through the users in the JSONArray to create a list of records
         List<Record> records = new ArrayList<Record>();
         for (Object o : users) {
             JSONObject user = (JSONObject)o;
             Map<String,Object> record = new LinkedHashMap<String,Object>();
             for (String field : fields) {
-                record.put(field,user.get(field));
+                Matcher m = this.attributePattern.matcher(field);
+                if (m.find()) {
+                    record.put(field,getAttributeValues(m.group(1),user));
+                } else {
+                    record.put(field,user.get(field));
+                }
             }
             records.add(new Record(record));
         }
@@ -143,6 +150,7 @@ public class KineticCoreUserHelper {
         return records;
     }
 
+    // Filter users was made protected for the purposes of testing
     private JSONArray searchUsers(BridgeRequest request) throws BridgeError {
         // Initializing the Http Objects
         HttpClient client = new DefaultHttpClient();
@@ -150,8 +158,11 @@ public class KineticCoreUserHelper {
         
         // Based on the passed fields figure out if an ?include needs to be in the Url
         String includeParam = null;
-        if (request.getFields().contains("attributes")) {
-            includeParam = "include=attributes";
+        for (String field : request.getFields()) {
+            if (field.equals("attributes") || attributePattern.matcher(field).matches()) {
+                includeParam = "include=attributes";
+                break;
+            }
         }
         if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) {
             // If they have a field in common, include details
@@ -192,74 +203,87 @@ public class KineticCoreUserHelper {
 
         return users;
     }
-    
-    private JSONArray filterUsers(JSONArray users, String query) throws BridgeError{
-        String[] indvQueryParts = query.split("&");
 
-        // Retrieving the slugs for the kapp and form slug that were passed in the query
-        Map<String,Object[]> queryValues = new HashMap<String,Object[]>();
-        for (String indvQueryPart : indvQueryParts) {
-            String[] str_array = indvQueryPart.split("=");
-            String field = str_array[0].trim();
-            String value = "";
-            if (str_array.length > 1) value = str_array[1].trim();
-            
-            // Used to search more complex objects (dates, attributes, boolean, etc.)
-            Object[] possibleEqualObjects;
-            if (value.equals("true") || value.equals("false")) {
-                // If it is a possible boolean object, include both the string and boolean object
-                possibleEqualObjects = new Object[] { value, Boolean.valueOf(value) };
-            } else if (value.equals("null")) {
-                possibleEqualObjects = new Object[] { value, null };
-            } else {
-                possibleEqualObjects = new Object[] { value };
-            }
-            queryValues.put(field, possibleEqualObjects);
+    private Pattern getPatternFromValue(String value) {
+        // Escape regex characters from value
+        String[] parts = value.split("(?<!\\\\)%");
+        for (int i = 0; i<parts.length; i++) {
+            if (!parts[i].isEmpty()) parts[i] = Pattern.quote(parts[i].replaceAll("\\\\%","%"));
         }
-        
-        JSONArray matchedUsers = users;
-        for (Map.Entry<String,Object[]> entry : queryValues.entrySet()) {
-            matchedUsers = matchFieldValues(matchedUsers, entry.getKey(), entry.getValue());
-        }
-        
-        return matchedUsers;
+        String regex = StringUtils.join(parts,".*?");
+        if (!value.isEmpty() && value.substring(value.length() - 1).equals("%")) regex += ".*?";
+        return Pattern.compile("^"+regex+"$",Pattern.CASE_INSENSITIVE);
     }
     
-    private JSONArray matchFieldValues(JSONArray users, String field, Object[] possibleValues) {
-        JSONArray matchedUsers = new JSONArray();
-        
-        // If passed in field is an attribute, save its attributeName
-        String attributeName = null;
-        Matcher m = this.attributePattern.matcher(field);
-        if (m.find()) attributeName = m.group(1);
-        
-        for (Object o : users) {
-            JSONObject user = (JSONObject)o;
-            // Get the value for the field
-            List fieldValues = new ArrayList();
-            if (attributeName != null) {
-                JSONArray attributes = (JSONArray)user.get("attributes");
-                for (Object attribute : attributes) {
-                    HashMap attributeMap = (HashMap)attribute;
-                    if (((String)attributeMap.get("name")).equals(attributeName)) {
-                        fieldValues = (List)attributeMap.get("values");
-                        break;
-                    }
-                }
-            } else {
-                fieldValues.add(user.get(field));
-            }
-            
-            for (Object fieldValue : fieldValues) {
-                for (Object value : possibleValues) {
-                    if (fieldValue == value) {
-                        matchedUsers.add(o);
-                    } else if (fieldValue != null && fieldValue.equals(value)) {
-                        matchedUsers.add(o);
-                    }
-                }
+    private List getAttributeValues(String name, JSONObject user) {
+        JSONArray attributes = (JSONArray)user.get("attributes");
+        for (Object attribute : attributes) {
+            HashMap attributeMap = (HashMap)attribute;
+            if (((String)attributeMap.get("name")).equals(name)) {
+                return (List)attributeMap.get("values");
             }
         }
+        return new ArrayList(); // Return an empty list if no values were found
+    }
+    
+    protected final JSONArray filterUsers(JSONArray users, String query) throws BridgeError {
+        String[] queryParts = query.split("&");
+        
+        Map<String,Object[]> queryMatchers = new HashMap<String,Object[]>();
+        for (String part : queryParts) {
+            String[] split = part.split("=");
+            String field = split[0].trim();
+            String value = split.length > 1 ? split[1].trim() : "";
+            
+            Object[] matchers;
+            if (value.equals("true") || value.equals("false")) {
+                matchers = new Object[] { getPatternFromValue(value), Boolean.valueOf(value) };
+            } else if (value.equals("null")) {
+                matchers = new Object[] { null, getPatternFromValue(value) };
+            } else if (value.isEmpty()) {
+                matchers = new Object[] { "" };
+            } else {
+                matchers = new Object[] { getPatternFromValue(value) };
+            }
+            queryMatchers.put(field,matchers);
+        }
+        
+        // Start with a full list of users and then delete from the list when they don't match
+        // a qualification. Will be left with a list of values that match all qualifications.
+        JSONArray matchedUsers = users;        
+        for (Map.Entry<String,Object[]> entry : queryMatchers.entrySet()) {
+            // If passed in field is an attribute, save its attributeName
+            String attributeName = null;
+            Matcher m = this.attributePattern.matcher(entry.getKey());
+            if (m.find()) attributeName = m.group(1);
+            
+            JSONArray matchedUsersEntry = new JSONArray();
+            for (Object o : matchedUsers) {
+                JSONObject user = (JSONObject)o;
+                // Get the value for the field
+                List fieldValues = attributeName != null ? getAttributeValues(attributeName,user) : Arrays.asList(new Object[] { user.get(entry.getKey()) });
+                
+                // if field values is empty, check for an empty value
+                if (fieldValues.isEmpty()) {
+                    for (Object value : entry.getValue()) {
+                        if (value.equals("")) matchedUsersEntry.add(o);
+                    }
+                } else {
+                    for (Object fieldValue : fieldValues) {
+                        for (Object value : entry.getValue()) {
+                            if (fieldValue == value || // Objects equal
+                               fieldValue != null && value != null && (
+                                   value.getClass() == Pattern.class && ((Pattern)value).matcher(fieldValue.toString()).matches() || // fieldValue != null && Pattern matches
+                                   value.equals(fieldValue) // fieldValue != null && values equal
+                               )
+                            ) { matchedUsersEntry.add(o); }
+                        }
+                    }
+                }
+            }
+            matchedUsers = (JSONArray)matchedUsersEntry;
+        }
+        
         return matchedUsers;
     }
 }
