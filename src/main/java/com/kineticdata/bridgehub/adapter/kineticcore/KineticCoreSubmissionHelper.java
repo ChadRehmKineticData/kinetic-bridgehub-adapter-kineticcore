@@ -10,6 +10,7 @@ import static com.kineticdata.bridgehub.adapter.kineticcore.KineticCoreAdapter.l
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -266,7 +267,7 @@ public class KineticCoreSubmissionHelper {
             String[] str_array = indvQueryPart.split("=");
             String field = str_array[0].trim();
             String value = "";
-            if (str_array.length > 1) value = str_array[1].trim();
+            if (str_array.length > 1) value = StringUtils.join(Arrays.copyOfRange(str_array, 1, str_array.length),"=");
             if (field.equals("formSlug")) { formSlug = value; }
             else if (field.equals("kappSlug")) { kappSlug = value; }
             else if (field.equals("limit")) { limit = value; }
