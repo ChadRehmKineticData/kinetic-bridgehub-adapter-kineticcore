@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.builder.CompareToBuilder;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -106,12 +109,29 @@ public class KineticCoreSubmissionHelper {
     }
     
     public RecordList search(BridgeRequest request) throws BridgeError {
-        Map<String,String> metadata = BridgeUtils.normalizePaginationMetadata(request.getMetadata());
-        
+        // Initialize the metadata variable that will be returned
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
         JSONObject response = searchSubmissions(request);
         JSONArray submissions = (JSONArray)response.get("submissions");
         
         List<Record> records = createRecordsFromSubmissions(request.getFields(), submissions);
+        
+        // Sort the records if they are all returned in a second page
+        if (request.getMetadata("order") == null && response.get("nextPageToken") == null) {
+            // name,type,desc assumes name ASC,type ASC,desc ASC
+            Map<String,String> defaultOrder = new LinkedHashMap<String,String>();
+            for (String field : request.getFields()) {
+                defaultOrder.put(field, "ASC");
+            }
+            records = sortRecords(defaultOrder, records);
+        } else if (response.get("nextPageToken") == null) {
+        // Creates a map out of order metadata
+          Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
+          records = sortRecords(orderParse, records);
+        } else {
+            metadata.put("warning","Records won't be ordered because there is more than one page of results returned.");
+            logger.debug("Warning: Records won't be ordered because there is more than one page of results returned.");
+        }
         
         metadata.put("size", String.valueOf(submissions.size()));
         metadata.put("nextPageToken",(String)response.get("nextPageToken"));
@@ -208,7 +228,7 @@ public class KineticCoreSubmissionHelper {
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
             }
         }
-        queryPartsList.add("limit=200");
+        queryPartsList.add("limit=1000");
         String query = StringUtils.join(queryPartsList,"&");
         
         if (kappSlug == null) {
@@ -275,13 +295,17 @@ public class KineticCoreSubmissionHelper {
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
             }
         }
+        // Add the include statement to get extra values and details
+        queryPartsList.add("include=values,details");
         
         // Add a limit to the query by either using the value that was passed, or defaulting limit=200
-        // Also add the include statement to get extra values and details
-        if (limit != null && !limit.isEmpty()) {
-            queryPartsList.add("include=values,details&limit="+limit);
+        String pageSize = request.getMetadata("pageSize");
+        if (pageSize != null) {
+            queryPartsList.add("limit="+pageSize);
+        } else if (limit != null && !limit.isEmpty()) {
+            queryPartsList.add("limit="+limit);
         } else {
-            queryPartsList.add("include=values,details&limit=200");
+            queryPartsList.add("limit=1000");
         }
         
         // If metadata[nextPageToken] is included in the request, add it to the query
@@ -344,5 +368,34 @@ public class KineticCoreSubmissionHelper {
         }
 
         return json;
+    }
+    
+    protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {
+        Collections.sort(records, new Comparator<Record>() {
+            @Override
+            public int compare(Record r1, Record r2){
+                CompareToBuilder comparator = new CompareToBuilder();
+
+                for (Map.Entry<String,String> entry : fieldParser.entrySet()) {
+                    String field = entry.getKey();
+                    String order = entry.getValue();
+
+                    Object o1 = r1.getValue(field);
+                    if (o1 != null && o1.getClass() == String.class) {o1 = o1.toString().toLowerCase();}
+
+                    Object o2 = r2.getValue(field);
+                    if (o2 != null && o2.getClass() == String.class) {o2 = o2.toString().toLowerCase();}
+
+                    if (order.equals("DESC")) {
+                        comparator.append(o2,o1);
+                    } else {
+                        comparator.append(o1,o2);
+                    }
+                }
+
+                return comparator.toComparison();
+            }
+        });
+        return records;
     }
 }

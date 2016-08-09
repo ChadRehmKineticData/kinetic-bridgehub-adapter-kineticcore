@@ -2,6 +2,7 @@ package com.kineticdata.bridgehub.adapter.kineticcore;
 
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
+import com.kineticdata.bridgehub.adapter.BridgeUtils;
 import com.kineticdata.bridgehub.adapter.Count;
 import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
@@ -10,6 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.builder.CompareToBuilder;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -41,7 +44,7 @@ public class KineticCoreUserHelper {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
-        this.attributePattern = Pattern.compile("attributes\\[\"(.*?)\"\\]");
+        this.attributePattern = Pattern.compile("attributes\\[(.*?)\\]");
     }
     
     public static final List<String> DETAIL_FIELDS = Arrays.asList(new String[] {
@@ -105,6 +108,20 @@ public class KineticCoreUserHelper {
         
         List<Record> records = createRecordsFromUsers(request.getFields(), users);
         
+        // Sort the records because they are always returned on one page
+        if (request.getMetadata("order") == null) {
+            // name,type,desc assumes name ASC,type ASC,desc ASC
+            Map<String,String> defaultOrder = new LinkedHashMap<String,String>();
+            for (String field : request.getFields()) {
+                defaultOrder.put(field, "ASC");
+            }
+            records = sortRecords(defaultOrder, records);
+        } else {
+        // Creates a map out of order metadata
+          Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
+          records = sortRecords(orderParse, records);
+        }
+        
         // Return the response
         return new RecordList(request.getFields(), records);
     }
@@ -120,6 +137,26 @@ public class KineticCoreUserHelper {
 
         return get;
     }
+    
+    /**
+       * Returns the string value of the object.
+       * <p>
+       * If the value is not a String, a JSON representation of the object will be returned.
+       * 
+       * @param value
+       * @return 
+       */
+    private String toString(Object value) {
+        String result = null;
+        if (value != null) {
+            if (String.class.isInstance(value)) {
+                result = (String)value;
+            } else {
+                result = JSONValue.toJSONString(value);
+            }
+        }
+        return result;
+     }
 
     // A helper method used to call createRecordsFromUsers but with a 
     // single record instead of an array
@@ -139,9 +176,9 @@ public class KineticCoreUserHelper {
             for (String field : fields) {
                 Matcher m = this.attributePattern.matcher(field);
                 if (m.find()) {
-                    record.put(field,getAttributeValues(m.group(1),user));
+                    record.put(field,toString(getAttributeValues(m.group(1),user)));
                 } else {
-                    record.put(field,user.get(field));
+                    record.put(field,toString(user.get(field)));
                 }
             }
             records.add(new Record(record));
@@ -285,5 +322,37 @@ public class KineticCoreUserHelper {
         }
         
         return matchedUsers;
+    }
+    
+    protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {
+        Collections.sort(records, new Comparator<Record>() {
+            @Override
+            public int compare(Record r1, Record r2){
+                CompareToBuilder comparator = new CompareToBuilder();
+
+                for (Map.Entry<String,String> entry : fieldParser.entrySet()) {
+                    String field = entry.getKey();
+                    String order = entry.getValue();
+
+                    Object o1 = r1.getValue(field);
+                    Object o2 = r2.getValue(field);
+                    // If the object is a type that cannot be sorted, continue to the next field
+                    if (o1 instanceof List) { continue; }
+                    if (o2 instanceof List) { continue; }
+                    // If the object is a string, lowercase the string so that capitalization doesn't factor into the comparison
+                    if (o1 != null && o1.getClass() == String.class) {o1 = o1.toString().toLowerCase();}
+                    if (o2 != null && o2.getClass() == String.class) {o2 = o2.toString().toLowerCase();}
+
+                    if (order.equals("DESC")) {
+                        comparator.append(o2,o1);
+                    } else {
+                        comparator.append(o1,o2);
+                    }
+                }
+
+                return comparator.toComparison();
+            }
+        });
+        return records;
     }
 }
