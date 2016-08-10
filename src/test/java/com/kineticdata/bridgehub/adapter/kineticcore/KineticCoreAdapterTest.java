@@ -120,7 +120,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         // Create empty user helper (don't need username,password, or url because we are
         // just using mock data instead of making calls to kinetic core
         KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "attributes[\"First Name\"]=Jeff";
+        String query = "attributes[First Name]=Jeff";
         
         JSONArray matchedUsers = null;
         try {
