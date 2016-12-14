@@ -4,21 +4,36 @@
 
   <groupId>com.kineticdata.bridges.adapter</groupId>
   <artifactId>kinetic-bridgehub-adapter-kineticcore</artifactId>
-  <version>1.0.2-SNAPSHOT</version>
+  <version>1.0.3-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>kinetic-bridgehub-adapter-kineticcore</name>
+  <scm>
+      <connection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-kineticcore.git</connection>
+      <developerConnection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-kineticcore.git</developerConnection>
+  </scm>
   <url>http://maven.apache.org</url>
-  
+
+  <repositories>
+        <repository>
+          <id>com.kineticdata</id>
+          <url>http://utilities.kineticdata.com/nexus/content/repositories/releases/</url>
+        </repository>
+    </repositories>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.6</maven.compiler.source>
     <maven.compiler.target>1.6</maven.compiler.target>
-    <maven.build.timestamp.format>yyyy-MM-dd</maven.build.timestamp.format>
+    <maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
   </properties>
 
   <dependencies>
+    <dependency>
+        <groupId>com.kineticdata.bridges.adapter</groupId>
+        <artifactId>kinetic-bridgehub-adapter</artifactId>
+        <version>1.0.3</version>
+    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -39,11 +54,6 @@
       <type>jar</type>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>kinetic-bridgehub-adapter</artifactId>
-      <version>1.0.1</version>
-    </dependency>
-    <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-api</artifactId>
         <version>1.7.10</version>
@@ -61,48 +71,77 @@
   </dependencies>
   
   <build>
-        <plugins>
-            <!-- Testing -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.11</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <artifactId>surefire-junit47</artifactId>
-                        <version>2.12</version>
-                    </dependency>
-                </dependencies>
-                <configuration>
-                    <!-- Allow the project to be built even if tests are failing. -->
-                    <testFailureIgnore>true</testFailureIgnore>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.2</version>
-                <executions>
-                    <execution>
-                        <id>install-bridgehub-adapter</id>
-                        <phase>clean</phase>
-                        <configuration>
-                            <file>${basedir}/lib/kinetic-bridgehub-adapter-1.0.1.jar</file>
-                            <repositoryLayout>default</repositoryLayout>
-                            <groupId>com.kineticdata.bridges.adapter</groupId>
-                            <artifactId>kinetic-bridgehub-adapter</artifactId>
-                            <version>1.0.1</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-        <finalName>${project.artifactId}-${project.version}-${maven.build.timestamp}</finalName>
+      <resources>
+          <resource>
+              <directory>src/main/resources</directory>
+              <filtering>true</filtering>
+          </resource>
+      </resources>
+      <plugins>
+          <plugin>
+              <groupId>org.codehaus.mojo</groupId>
+              <artifactId>buildnumber-maven-plugin</artifactId>
+              <version>1.3</version>
+              <executions>
+                  <execution>
+                      <phase>validate</phase>
+                      <goals>
+                          <goal>create</goal>
+                      </goals>
+                      <configuration>
+                          <doCheck>false</doCheck>
+                          <doUpdate>false</doUpdate>
+                          <shortRevisionLength>7</shortRevisionLength>
+                      </configuration>
+                  </execution>
+                  <execution>
+                      <id>generate-timestamp</id>
+                      <phase>validate</phase>
+                      <goals>
+                          <goal>create</goal>
+                      </goals>
+                      <configuration>
+                          <doCheck>false</doCheck>
+                          <doUpdate>false</doUpdate>
+                          <buildNumberPropertyName>buildDate</buildNumberPropertyName>
+                          <format>{0,date,yyyy-MM-dd HH:mm:ss Z}</format>
+                          <items>
+                              <item>timestamp</item>
+                          </items>
+                      </configuration>
+                  </execution>
+              </executions>
+          </plugin>
+          <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-jar-plugin</artifactId>
+              <version>3.0.2</version>
+              <configuration>
+                  <archive>
+                      <manifestEntries>
+                          <Build-Time>${maven.build.timestamp}</Build-Time>
+                      </manifestEntries>
+                  </archive>
+              </configuration>
+          </plugin>
+          <!-- Testing -->
+          <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-surefire-plugin</artifactId>
+              <version>2.11</version>
+              <dependencies>
+                  <dependency>
+                      <groupId>org.apache.maven.surefire</groupId>
+                      <artifactId>surefire-junit47</artifactId>
+                      <version>2.12</version>
+                  </dependency>
+              </dependencies>
+              <configuration>
+                  <!-- Allow the project to be built even if tests are failing. -->
+                  <testFailureIgnore>true</testFailureIgnore>
+              </configuration>
+          </plugin>
+      </plugins>
+      <finalName>${project.artifactId}-${project.version}</finalName>
     </build>
 </project>

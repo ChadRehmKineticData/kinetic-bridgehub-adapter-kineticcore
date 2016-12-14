@@ -276,7 +276,7 @@ public class KineticCoreSubmissionHelper {
      }
     
     private JSONObject searchSubmissions(BridgeRequest request) throws BridgeError {
-        String[] indvQueryParts = request.getQuery().split("&");
+        String[] indvQueryParts = request.getQuery().split("&(?=[^&]*?=)");
 
         // Retrieving the slugs for the kapp and form slug that were passed in the query
         String kappSlug = null;
@@ -292,7 +292,7 @@ public class KineticCoreSubmissionHelper {
             else if (field.equals("kappSlug")) { kappSlug = value; }
             else if (field.equals("limit")) { limit = value; }
             else {
-                queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
+                queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value.trim()));
             }
         }
         // Add the include statement to get extra values and details

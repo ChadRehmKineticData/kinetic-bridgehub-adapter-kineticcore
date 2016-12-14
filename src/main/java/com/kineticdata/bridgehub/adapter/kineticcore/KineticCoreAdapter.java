@@ -33,6 +33,20 @@ public class KineticCoreAdapter implements BridgeAdapter {
     
     /** Defines the logger */
     protected static final org.slf4j.Logger logger = LoggerFactory.getLogger(KineticCoreAdapter.class);
+
+    /** Adapter version constant. */
+    public static String VERSION;
+    /** Load the properties version from the version.properties file. */
+    static {
+        try {
+            java.util.Properties properties = new java.util.Properties();
+            properties.load(KineticCoreAdapter.class.getResourceAsStream("/"+KineticCoreAdapter.class.getName()+".version"));
+            VERSION = properties.getProperty("version");
+        } catch (IOException e) {
+            logger.warn("Unable to load "+KineticCoreAdapter.class.getName()+" version properties.", e);
+            VERSION = "Unknown";
+        }
+    }
     
     /** Defines the collection of property names for the adapter. */
     public static class Properties {
@@ -69,7 +83,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
     
     @Override
     public String getVersion() {
-       return  "1.0.1";
+       return VERSION;
     }
     
     @Override
@@ -102,11 +116,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
     @Override
     public Count count(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
-        // Log the access
-        logger.trace("Counting the records");
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Query: " + request.getQuery());
-
+        
         if (!VALID_STRUCTURES.contains(request.getStructure())) {
             throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
         }
@@ -126,11 +136,6 @@ public class KineticCoreAdapter implements BridgeAdapter {
     @Override
     public Record retrieve(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
-        // Log the access
-        logger.trace("Retrieving a record");
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Fields: " + request.getFieldString());
-        logger.trace("  Query: " + request.getQuery());
 
         if (!VALID_STRUCTURES.contains(request.getStructure())) {
             throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
@@ -155,11 +160,6 @@ public class KineticCoreAdapter implements BridgeAdapter {
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
-        // Log the access
-        logger.trace("Searching the records");
-        logger.trace("  Structure: " + request.getStructure());
-        logger.trace("  Fields: " + request.getFieldString());
-        logger.trace("  Query: " + request.getQuery());
 
         if (!VALID_STRUCTURES.contains(request.getStructure())) {
             throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");

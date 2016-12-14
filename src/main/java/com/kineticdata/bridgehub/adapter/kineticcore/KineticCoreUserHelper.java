@@ -44,7 +44,7 @@ public class KineticCoreUserHelper {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
-        this.attributePattern = Pattern.compile("attributes\\[(.*?)\\]");
+        this.attributePattern = Pattern.compile("(.*?)\\[(.*?)\\]");
     }
     
     public static final List<String> DETAIL_FIELDS = Arrays.asList(new String[] {
@@ -74,7 +74,7 @@ public class KineticCoreUserHelper {
         }
 
         JSONObject user;
-        String url = String.format("%s/app/api/v1/users/%s",this.spaceUrl,username);
+        String url = String.format("%s/app/api/v1/users/%s?include=attributes,profileAttributes",this.spaceUrl,username);
 
         HttpClient client = new DefaultHttpClient();
         HttpResponse response;
@@ -176,7 +176,7 @@ public class KineticCoreUserHelper {
             for (String field : fields) {
                 Matcher m = this.attributePattern.matcher(field);
                 if (m.find()) {
-                    record.put(field,toString(getAttributeValues(m.group(1),user)));
+                    record.put(field,toString(getAttributeValues(m.group(1),m.group(2),user)));
                 } else {
                     record.put(field,toString(user.get(field)));
                 }
@@ -195,15 +195,34 @@ public class KineticCoreUserHelper {
         
         // Based on the passed fields figure out if an ?include needs to be in the Url
         String includeParam = null;
-        for (String field : request.getFields()) {
-            if (field.equals("attributes") || attributePattern.matcher(field).matches()) {
-                includeParam = "include=attributes";
-                break;
+        if (request.getFields() != null) {
+            Boolean includeAttributes = false;
+            Boolean includeProfileAttributes = false;
+            for (String field : request.getFields()) {
+                Matcher m = attributePattern.matcher(field);
+                String attributeType = null;
+                if (m.matches()) {
+                    attributeType = m.group(1);
+                }
+                if (field.equals("attributes")) {
+                    includeAttributes = true;
+                }
+                else if (field.equals("profileAttributes")) {
+                    includeProfileAttributes = true;
+                }
+                else if (attributeType != null) {
+                    if (attributeType.equals("attributes")) {
+                        includeAttributes = true;
+                    } else if (attributeType.equals("profileAttributes")) {
+                        includeProfileAttributes = true;
+                    }
+                }
+                if (includeAttributes && includeProfileAttributes) break;
             }
-        }
-        if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) {
-            // If they have a field in common, include details
-            includeParam = includeParam == null ? "include=details" : includeParam + ",details";
+            if (includeAttributes) includeParam = "include=attributes";
+            if (includeProfileAttributes) includeParam = includeParam == null ? "include=profileAttributes" : includeParam + ",profileAttributes";
+            // If request.getFields() has a field in common with the detail fields list, include details
+            if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) includeParam = includeParam == null ? "include=details" : includeParam + ",details";
         }
         
         String url = this.spaceUrl + "/app/api/v1/users";
@@ -252,8 +271,9 @@ public class KineticCoreUserHelper {
         return Pattern.compile("^"+regex+"$",Pattern.CASE_INSENSITIVE);
     }
     
-    private List getAttributeValues(String name, JSONObject user) {
-        JSONArray attributes = (JSONArray)user.get("attributes");
+    private List getAttributeValues(String type, String name, JSONObject user) throws BridgeError {
+        if (!user.containsKey(type)) throw new BridgeError(String.format("The field '%s' cannot be found on the User object",type));
+        JSONArray attributes = (JSONArray)user.get(type);
         for (Object attribute : attributes) {
             HashMap attributeMap = (HashMap)attribute;
             if (((String)attributeMap.get("name")).equals(name)) {
@@ -290,15 +310,19 @@ public class KineticCoreUserHelper {
         JSONArray matchedUsers = users;        
         for (Map.Entry<String,Object[]> entry : queryMatchers.entrySet()) {
             // If passed in field is an attribute, save its attributeName
+            String attributeType = null;
             String attributeName = null;
             Matcher m = this.attributePattern.matcher(entry.getKey());
-            if (m.find()) attributeName = m.group(1);
+            if (m.find()) {
+                attributeType = m.group(1);
+                attributeName = m.group(2);
+            }
             
             JSONArray matchedUsersEntry = new JSONArray();
             for (Object o : matchedUsers) {
                 JSONObject user = (JSONObject)o;
                 // Get the value for the field
-                List fieldValues = attributeName != null ? getAttributeValues(attributeName,user) : Arrays.asList(new Object[] { user.get(entry.getKey()) });
+                List fieldValues = attributeName != null ? getAttributeValues(attributeType,attributeName,user) : Arrays.asList(new Object[] { user.get(entry.getKey()) });
                 
                 // if field values is empty, check for an empty value
                 if (fieldValues.isEmpty()) {

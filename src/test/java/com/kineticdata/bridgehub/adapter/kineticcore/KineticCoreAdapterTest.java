@@ -138,6 +138,30 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     }
     
     @Test
+    public void test_users_queryProfileAttributeField() {
+        BridgeError error = null;
+        
+        // Create empty user helper (don't need username,password, or url because we are
+        // just using mock data instead of making calls to kinetic core
+        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
+        String query = "profileAttributes[Task Administrator]=false";
+        
+        JSONArray matchedUsers = null;
+        try {
+            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
+        } catch (BridgeError e) { error = e; }
+        
+        assertNull(error);
+        
+        // Assert that only 1 user matched the query
+        assertEquals(1,matchedUsers.size());
+        // Check to see if the username is jeff.johnson@gmail.com, the user who should 
+        // have the Task Administrator profile attribute of false
+        JSONObject object = (JSONObject)matchedUsers.get(0);
+        assertEquals("jeff.johnson@gmail.com",object.get("username").toString());
+    }
+    
+    @Test
     public void test_users_queryStandardField() {
         BridgeError error = null;
         
@@ -240,6 +264,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         email: test.user@acme.com
         display name: Test user
         attributes: [First Name = Test, Last Name = User]
+        profileAttributes: []
         space admin: false
         enabled: false
         
@@ -247,6 +272,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         email: don.demo@kineticdata.com
         display name: Don Demo
         attributes: [Group = Fulfillment::IT]
+        profileAttributes: [Task Administrator = true]
         space admin: false
         enabled: true
         
@@ -254,6 +280,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         email: prod.user@kineticdata.com
         display name: Production User
         attributes: []
+        profileAttributes: [Task Administrator = true]
         space admin: true
         enabled: true
         
@@ -261,6 +288,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         email: jeff.johnson@gmail.com
         display name: Jeff Johnson
         attributes: [First Name = [Jeff, Jeffery], Last Name = Johnson]
+        profileAttributes: [Task Administrator = false]
         space admin: true
         enabled: true
         
@@ -268,12 +296,13 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         email: dev.user@kineticdata.dev
         display name: Test user
         attributes: []
+        profileAttributes: []
         space admin: true
         enabled: true
     */    
     public JSONArray buildUserRecordArray() {
         if (userRecordsMockData == null) {
-            userRecordsMockData = "{\"users\":[{\"attributes\":[{\"values\":[\"Test\"],\"name\":\"First Name\"},{\"values\":[\"User\"],\"name\":\"Last Name\"}],\"displayName\":\"Test User\",\"email\":\"test.user@acme.com\",\"enabled\":false,\"spaceAdmin\":false,\"username\":\"test.user\"},{\"attributes\":[{\"values\":[\"Fulfillment::IT\"],\"name\":\"Group\"}],\"displayName\":\"Don Demo\",\"email\":\"don.demo@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":false,\"username\":\"don.demo@kineticdata.com\"},{\"attributes\":[],\"displayName\":\"Production User\",\"email\":\"prod.user@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"prod.user@kineticdata.com\"},{\"attributes\":[{\"values\":[\"Jeff\",\"Jeffery\"],\"name\":\"First Name\"},{\"values\":[\"Johnson\"],\"name\":\"Last Name\"}],\"displayName\":\"Jeff Johnson\",\"email\":\"jeff.johnson@gmail.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"jeff.johnson@gmail.com\"},{\"attributes\":[],\"displayName\":\"Development User\",\"email\":\"dev.user@kineticdata.dev\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"dev.user@kineticdata.dev\"}]}";
+            userRecordsMockData = "{\"users\":[{\"attributes\":[{\"values\":[\"Test\"],\"name\":\"First Name\"},{\"values\":[\"User\"],\"name\":\"Last Name\"}],\"profileAttributes\":[],\"displayName\":\"Test User\",\"email\":\"test.user@acme.com\",\"enabled\":false,\"spaceAdmin\":false,\"username\":\"test.user\"},{\"attributes\":[{\"values\":[\"Fulfillment::IT\"],\"name\":\"Group\"}],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"true\"]}],\"displayName\":\"Don Demo\",\"email\":\"don.demo@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":false,\"username\":\"don.demo@kineticdata.com\"},{\"attributes\":[],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"true\"]}],\"displayName\":\"Production User\",\"email\":\"prod.user@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"prod.user@kineticdata.com\"},{\"attributes\":[{\"values\":[\"Jeff\",\"Jeffery\"],\"name\":\"First Name\"},{\"values\":[\"Johnson\"],\"name\":\"Last Name\"}],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"false\"]}],\"displayName\":\"Jeff Johnson\",\"email\":\"jeff.johnson@gmail.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"jeff.johnson@gmail.com\"},{\"attributes\":[],\"profileAttributes\":[],\"displayName\":\"Development User\",\"email\":\"dev.user@kineticdata.dev\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"dev.user@kineticdata.dev\"}]}";
         }
         JSONObject jsonObject = (JSONObject)JSONValue.parse(userRecordsMockData);
         return (JSONArray)jsonObject.get("users");
