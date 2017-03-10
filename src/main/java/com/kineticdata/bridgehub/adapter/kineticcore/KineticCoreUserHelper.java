@@ -286,58 +286,92 @@ public class KineticCoreUserHelper {
     protected final JSONArray filterUsers(JSONArray users, String query) throws BridgeError {
         String[] queryParts = query.split("&");
         
-        Map<String,Object[]> queryMatchers = new HashMap<String,Object[]>();
+        Map<String[],Object[]> queryMatchers = new HashMap<String[],Object[]>();
+        // Variables used for OR query (pattern and fields)
+        String pattern = null;
+        String[] fields = null;
+        // Iterate through the query parts and create all the possible matchers to check against
+        // the user results
         for (String part : queryParts) {
             String[] split = part.split("=");
             String field = split[0].trim();
             String value = split.length > 1 ? split[1].trim() : "";
             
             Object[] matchers;
-            if (value.equals("true") || value.equals("false")) {
-                matchers = new Object[] { getPatternFromValue(value), Boolean.valueOf(value) };
-            } else if (value.equals("null")) {
-                matchers = new Object[] { null, getPatternFromValue(value) };
-            } else if (value.isEmpty()) {
-                matchers = new Object[] { "" };
+            if (field.equals("pattern")) {
+                pattern = value;
+            } else if (field.equals("fields")) {
+                fields = value.split(",");
             } else {
-                matchers = new Object[] { getPatternFromValue(value) };
+                // If the field isn't 'pattern' or 'fields', add the field and appropriate values 
+                // to the query matcher
+                if (value.equals("true") || value.equals("false")) {
+                    matchers = new Object[] { getPatternFromValue(value), Boolean.valueOf(value) };
+                } else if (value.equals("null")) {
+                    matchers = new Object[] { null, getPatternFromValue(value) };
+                } else if (value.isEmpty()) {
+                    matchers = new Object[] { "" };
+                } else {
+                    matchers = new Object[] { getPatternFromValue(value) };
+                }
+                queryMatchers.put(new String[] { field }, matchers);
             }
-            queryMatchers.put(field,matchers);
+        }
+        
+        // If both query and pattern are not equal to null, add the list of fields and the
+        // pattern (compiled into a regex Pattern object) to the queryMatchers map
+        if (pattern != null && fields != null) {
+            queryMatchers.put(fields,new Object[] { Pattern.compile(".*"+Pattern.quote(pattern)+".*",Pattern.CASE_INSENSITIVE) });
+        } 
+        // If both pattern & fields are not equals to null AND both pattern & fields are not
+        // both null, that means that one is null and the other is not which is not an
+        // allowed query.
+        else if (pattern != null || fields != null) {
+            throw new BridgeError("The 'pattern' and 'fields' parameter must be provided together.  When the 'pattern' parameter "+
+                    "is provided the 'fields' parameter is required and when the 'fields' parameter is provided the 'pattern' parameter is required.");
         }
         
         // Start with a full list of users and then delete from the list when they don't match
         // a qualification. Will be left with a list of values that match all qualifications.
         JSONArray matchedUsers = users;        
-        for (Map.Entry<String,Object[]> entry : queryMatchers.entrySet()) {
-            // If passed in field is an attribute, save its attributeName
-            String attributeType = null;
-            String attributeName = null;
-            Matcher m = this.attributePattern.matcher(entry.getKey());
-            if (m.find()) {
-                attributeType = m.group(1);
-                attributeName = m.group(2);
-            }
-            
+        for (Map.Entry<String[],Object[]> entry : queryMatchers.entrySet()) {
             JSONArray matchedUsersEntry = new JSONArray();
-            for (Object o : matchedUsers) {
-                JSONObject user = (JSONObject)o;
-                // Get the value for the field
-                List fieldValues = attributeName != null ? getAttributeValues(attributeType,attributeName,user) : Arrays.asList(new Object[] { user.get(entry.getKey()) });
-                
-                // if field values is empty, check for an empty value
-                if (fieldValues.isEmpty()) {
-                    for (Object value : entry.getValue()) {
-                        if (value.equals("")) matchedUsersEntry.add(o);
-                    }
-                } else {
-                    for (Object fieldValue : fieldValues) {
-                        for (Object value : entry.getValue()) {
-                            if (fieldValue == value || // Objects equal
-                               fieldValue != null && value != null && (
-                                   value.getClass() == Pattern.class && ((Pattern)value).matcher(fieldValue.toString()).matches() || // fieldValue != null && Pattern matches
-                                   value.equals(fieldValue) // fieldValue != null && values equal
-                               )
-                            ) { matchedUsersEntry.add(o); }
+            for (String field : entry.getKey()) {
+                // If passed in field is an attribute, save its attributeName
+                String attributeType = null;
+                String attributeName = null;
+                Matcher m = this.attributePattern.matcher(field);
+                if (m.find()) {
+                    attributeType = m.group(1);
+                    attributeName = m.group(2);
+                }
+
+                for (Object o : matchedUsers) {
+                    // Check if the object matches the field qualification if it hasn't already been
+                    // successfully matched
+                    if (!matchedUsersEntry.contains(o)) {
+                        JSONObject user = (JSONObject)o;
+                        // Get the value for the field
+                        List fieldValues = attributeName != null ? getAttributeValues(attributeType,attributeName,user) : Arrays.asList(new Object[] { user.get(field) });
+
+                        // if field values is empty, check for an empty value
+                        if (fieldValues.isEmpty()) {
+                            for (Object value : entry.getValue()) {
+                                if (value.equals("")) matchedUsersEntry.add(o);
+                            }
+                        } else {
+                            for (Object fieldValue : fieldValues) {
+                                for (Object value : entry.getValue()) {
+                                    if (fieldValue == value || // Objects equal
+                                       fieldValue != null && value != null && (
+                                           value.getClass() == Pattern.class && ((Pattern)value).matcher(fieldValue.toString()).matches() || // fieldValue != null && Pattern matches
+                                           value.equals(fieldValue) // fieldValue != null && values equal
+                                       )
+                                    ) { 
+                                        matchedUsersEntry.add(o);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
