@@ -1,5 +1,6 @@
 package com.kineticdata.bridgehub.adapter.kineticcore;
 
+import com.google.common.hash.Hashing;
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
 import com.kineticdata.bridgehub.adapter.BridgeUtils;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.codec.Charsets;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.CompareToBuilder;
@@ -194,39 +196,46 @@ public class KineticCoreUserHelper {
         HttpResponse response;
         
         // Based on the passed fields figure out if an ?include needs to be in the Url
-        String includeParam = null;
+        List<String> includes = new ArrayList<String>();
+        
+        String team = null;
+        Pattern pattern = Pattern.compile("team=(.*?)(?:\\z|&)");
+        Matcher qm = pattern.matcher(request.getQuery());
+        if (qm.find()) {
+            team = qm.group(1);
+            request.setQuery(request.getQuery().replaceFirst("team=.*?(\\z|&)",""));
+            if (request.getQuery().isEmpty()) request.setQuery("username=%");
+            includes.add("memberships.user");
+        }
+        
+        if (request.getQuery().contains("profileAttributes")) includes.add(team == null ? "profileAttributes" : "memberships.user.profileAttributes");
+        if (request.getQuery().contains("attributes")) includes.add(team == null ? "attributes" : "memberships.user.attributes");
+        for (String detailField : DETAIL_FIELDS) {
+            if (request.getQuery().contains(detailField)) {
+                includes.add(team == null ? "details" : "memberships.user.details");
+                break;
+            }
+        }
+        
         if (request.getFields() != null) {
-            Boolean includeAttributes = false;
-            Boolean includeProfileAttributes = false;
             for (String field : request.getFields()) {
                 Matcher m = attributePattern.matcher(field);
                 String attributeType = null;
-                if (m.matches()) {
-                    attributeType = m.group(1);
+                if (m.matches()) attributeType = m.group(1);
+                if (field.equals("attributes") || (attributeType != null && attributeType.equals("attributes"))) {
+                    String include = team == null ? "attributes" : "memberships.user.attributes";
+                    if (!includes.contains(include)) includes.add(include);
+                } else if (field.equals("profileAttributes") || (attributeType != null && attributeType.equals("profileAttributes"))) {
+                    String include = team == null ? "profileAttributes" : "memberships.user.profileAttributes";
+                    if (!includes.contains(include)) includes.add(include);
                 }
-                if (field.equals("attributes")) {
-                    includeAttributes = true;
-                }
-                else if (field.equals("profileAttributes")) {
-                    includeProfileAttributes = true;
-                }
-                else if (attributeType != null) {
-                    if (attributeType.equals("attributes")) {
-                        includeAttributes = true;
-                    } else if (attributeType.equals("profileAttributes")) {
-                        includeProfileAttributes = true;
-                    }
-                }
-                if (includeAttributes && includeProfileAttributes) break;
             }
-            if (includeAttributes) includeParam = "include=attributes";
-            if (includeProfileAttributes) includeParam = includeParam == null ? "include=profileAttributes" : includeParam + ",profileAttributes";
             // If request.getFields() has a field in common with the detail fields list, include details
-            if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) includeParam = includeParam == null ? "include=details" : includeParam + ",details";
+            if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) includes.add(team == null ? "details" : "memberships.user.details");
         }
         
-        String url = this.spaceUrl + "/app/api/v1/users";
-        if (includeParam != null) url += "?"+includeParam;
+        String url = team == null ? this.spaceUrl+"/app/api/v1/users" : this.spaceUrl+"/app/api/v1/teams/"+Hashing.md5().hashString(team, Charsets.UTF_8).toString();
+        if (!includes.isEmpty()) url += "?include="+StringUtils.join(includes,",");
         HttpGet get = new HttpGet(url);
         get = addAuthenticationHeader(get, this.username, this.password);
         
@@ -250,10 +259,16 @@ public class KineticCoreUserHelper {
             throw new BridgeError("Bridge Error: " + json.toJSONString());
         }
 
-        JSONArray users = (JSONArray)json.get("users");
+        JSONArray users;
+        if (team != null) {
+            JSONObject teamJson = (JSONObject)json.get("team");
+            users = (JSONArray)teamJson.get("memberships");
+        } else {
+            users = (JSONArray)json.get("users");
+        }
         
         String query = request.getQuery();
-        if (!query.isEmpty()) {
+        if (!query.isEmpty() || team != null) {
             users = filterUsers(users, request.getQuery());
         }
 
@@ -347,10 +362,16 @@ public class KineticCoreUserHelper {
                 }
 
                 for (Object o : matchedUsers) {
+                    JSONObject user = (JSONObject)o;
+                    // If the object still has a user key, it is from the membership object and there needs
+                    // to be one more o.get("user") to get to the user object
+                    if (user.containsKey("user")) {
+                        o = user.get("user");
+                        user = (JSONObject)o;
+                    }
                     // Check if the object matches the field qualification if it hasn't already been
                     // successfully matched
                     if (!matchedUsersEntry.contains(o)) {
-                        JSONObject user = (JSONObject)o;
                         // Get the value for the field
                         List fieldValues = attributeName != null ? getAttributeValues(attributeType,attributeName,user) : Arrays.asList(new Object[] { user.get(field) });
 
