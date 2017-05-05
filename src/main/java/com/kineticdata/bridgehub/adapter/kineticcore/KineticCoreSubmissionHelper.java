@@ -186,25 +186,11 @@ public class KineticCoreSubmissionHelper {
         // Go through the submissions in the JSONArray to create a list of records
         List<Record> records = new ArrayList<Record>();
         for (Object o : submissions) {
-            JSONObject submission = (JSONObject)o;
-            Map<String,Object> record = new LinkedHashMap<String,Object>();
-            for (int fldIndex=0;fldIndex<fields.size();fldIndex++) {
-                Object searchableField = searchableFields.get(fldIndex);
-                if (searchableField.getClass() == String.class) {
-                    // If the field is a string, just do a simple retrieve and put
-                    record.put(fields.get(fldIndex),toString(submission.get(searchableField.toString())));
-                } else if (searchableField.getClass() == ArrayList.class) {
-                    // If the field is a list, iterate through the object until you
-                    // find the result
-                    List<String> multiLevelField = (ArrayList<String>)searchableField;
-                    JSONObject jsonObject = (JSONObject)submission.get(multiLevelField.get(0));
-                    record.put(fields.get(fldIndex), toString(jsonObject.get(multiLevelField.get(1))));
-                } else {
-                    throw new BridgeError("There was an error with parsing the record object. Field type '"+searchableField.getClass()+"' is not valid.");
-                }
-            }
-            records.add(new Record(record));
+            records.add(new Record((Map)o));
         }
+        
+        // Get any field values from a JSON object if the field is in the form of field[jsonKey]
+        records = BridgeUtils.getNestedFields(fields,records);
 
         return records;
     }
@@ -263,7 +249,7 @@ public class KineticCoreSubmissionHelper {
        * @param value
        * @return 
        */
-    private String toString(Object value) {
+    private static String toString(Object value) {
         String result = null;
         if (value != null) {
             if (String.class.isInstance(value)) {
@@ -381,10 +367,10 @@ public class KineticCoreSubmissionHelper {
                     String order = entry.getValue();
 
                     Object o1 = r1.getValue(field);
-                    if (o1 != null && o1.getClass() == String.class) {o1 = o1.toString().toLowerCase();}
+                    if (o1 != null) { o1 = KineticCoreSubmissionHelper.toString(o1).toLowerCase(); }
 
                     Object o2 = r2.getValue(field);
-                    if (o2 != null && o2.getClass() == String.class) {o2 = o2.toString().toLowerCase();}
+                    if (o2 != null) { o2 = KineticCoreSubmissionHelper.toString(o2).toLowerCase(); }
 
                     if (order.equals("DESC")) {
                         comparator.append(o2,o1);
