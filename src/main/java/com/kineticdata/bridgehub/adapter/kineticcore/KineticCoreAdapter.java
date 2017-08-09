@@ -60,6 +60,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
     private KineticCoreSubmissionHelper submissionHelper;
     private KineticCoreUserHelper userHelper;
     private KineticCoreTeamHelper teamHelper;
+    private KineticCoreKappHelper kappHelper;
+    private KineticCoreFormHelper formHelper;
     
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
             new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
@@ -71,7 +73,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
      * Structures that are valid to use in the bridge
      */
     public static final List<String> VALID_STRUCTURES = Arrays.asList(new String[] {
-        "Submissions","Users","Teams"
+        "Submissions","Users","Teams","Kapps","Forms"
     });
     
     /*---------------------------------------------------------------------------------------------
@@ -105,6 +107,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
         this.submissionHelper = new KineticCoreSubmissionHelper(this.username, this.password, this.spaceUrl); 
         this.userHelper = new KineticCoreUserHelper(this.username, this.password, this.spaceUrl);
         this.teamHelper = new KineticCoreTeamHelper(this.username, this.password, this.spaceUrl);
+        this.kappHelper = new KineticCoreKappHelper(this.username, this.password, this.spaceUrl);
+        this.formHelper = new KineticCoreFormHelper(this.username, this.password, this.spaceUrl);
         
         // Testing the configuration values to make sure that they
         // correctly authenticate with Core
@@ -130,6 +134,10 @@ public class KineticCoreAdapter implements BridgeAdapter {
             count = this.userHelper.count(request);
         } else if (request.getStructure().equals("Teams")) {
             count = this.teamHelper.count(request);
+        } else if (request.getStructure().equals("Kapps")) { 
+            count = this.kappHelper.count(request);
+        } else if (request.getStructure().equals("Forms")) {
+            count = this.formHelper.count(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a count method defined");
         }
@@ -156,6 +164,10 @@ public class KineticCoreAdapter implements BridgeAdapter {
             record = this.userHelper.retrieve(request);
         } else if (request.getStructure().equals("Teams")) {
             record = this.teamHelper.retrieve(request);
+        } else if (request.getStructure().equals("Kapps")) { 
+            record = this.kappHelper.retrieve(request);
+        } else if (request.getStructure().equals("Forms")) {
+            record = this.formHelper.retrieve(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a retrieve method defined");
         }
@@ -182,6 +194,10 @@ public class KineticCoreAdapter implements BridgeAdapter {
             recordList = this.userHelper.search(request);
         } else if (request.getStructure().equals("Teams")) {
             recordList = this.teamHelper.search(request);
+        } else if (request.getStructure().equals("Kapps")) { 
+            recordList = this.kappHelper.search(request);
+        } else if (request.getStructure().equals("Forms")) {
+            recordList = this.formHelper.search(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a search method defined");
         }
