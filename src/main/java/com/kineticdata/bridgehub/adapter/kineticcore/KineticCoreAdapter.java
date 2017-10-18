@@ -62,6 +62,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
     private KineticCoreTeamHelper teamHelper;
     private KineticCoreKappHelper kappHelper;
     private KineticCoreFormHelper formHelper;
+    private KineticCoreDatastoreHelper datastoreHelper;
     
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
             new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
@@ -73,7 +74,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
      * Structures that are valid to use in the bridge
      */
     public static final List<String> VALID_STRUCTURES = Arrays.asList(new String[] {
-        "Submissions","Users","Teams","Kapps","Forms"
+        "Submissions","Users","Teams","Kapps","Forms","Datastores"
     });
     
     /*---------------------------------------------------------------------------------------------
@@ -109,6 +110,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
         this.teamHelper = new KineticCoreTeamHelper(this.username, this.password, this.spaceUrl);
         this.kappHelper = new KineticCoreKappHelper(this.username, this.password, this.spaceUrl);
         this.formHelper = new KineticCoreFormHelper(this.username, this.password, this.spaceUrl);
+        this.datastoreHelper = new KineticCoreDatastoreHelper(this.username, this.password, this.spaceUrl);
         
         // Testing the configuration values to make sure that they
         // correctly authenticate with Core
@@ -138,6 +140,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
             count = this.kappHelper.count(request);
         } else if (request.getStructure().equals("Forms")) {
             count = this.formHelper.count(request);
+        } else if (request.getStructure().equals("Datastores")) {
+            count = this.datastoreHelper.count(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a count method defined");
         }
@@ -168,6 +172,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
             record = this.kappHelper.retrieve(request);
         } else if (request.getStructure().equals("Forms")) {
             record = this.formHelper.retrieve(request);
+        } else if (request.getStructure().equals("Datastores")) {
+            record = this.datastoreHelper.retrieve(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a retrieve method defined");
         }
@@ -198,6 +204,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
             recordList = this.kappHelper.search(request);
         } else if (request.getStructure().equals("Forms")) {
             recordList = this.formHelper.search(request);
+        } else if (request.getStructure().equals("Datastores")) {
+            recordList = this.datastoreHelper.search(request);
         } else {
             throw new BridgeError("The structure '"+request.getStructure()+"' does not have a search method defined");
         }
