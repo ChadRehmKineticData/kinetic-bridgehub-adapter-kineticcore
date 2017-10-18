@@ -124,8 +124,24 @@ public class KineticCoreKappHelper {
           records = sortRecords(orderParse, records);
         }
         
+        // Add pagination to the returned record list
+        int pageToken = request.getMetadata("pageToken") == null || request.getMetadata("pageToken").isEmpty() ?
+                0 : Integer.parseInt(new String(Base64.decodeBase64(request.getMetadata("pageToken"))));
+        
+        int limit = request.getMetadata("limit") == null || request.getMetadata("limit").isEmpty() ?
+                records.size()-pageToken : Integer.parseInt(request.getMetadata("limit"));
+        
+        String nextPageToken = null;
+        if (pageToken+limit < records.size()) nextPageToken = Base64.encodeBase64String(String.valueOf(pageToken+limit).getBytes());
+        
+        records = records.subList(pageToken, pageToken+limit > records.size() ? records.size() : pageToken+limit);
+        
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
+        metadata.put("size",String.valueOf(limit));
+        metadata.put("pageToken",nextPageToken);
+        
         // Return the response
-        return new RecordList(request.getFields(), records);
+        return new RecordList(request.getFields(), records, metadata);
     }
     
     /*---------------------------------------------------------------------------------------------
