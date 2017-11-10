@@ -76,7 +76,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
      * Structures that are valid to use in the bridge
      */
     public static final List<String> VALID_STRUCTURES = Arrays.asList(new String[] {
-        "Submissions","Users","Teams","Kapps","Forms","Datastores","Records"
+        "Submissions","Users","Teams","Kapps","Forms"
     });
 
     /*---------------------------------------------------------------------------------------------
