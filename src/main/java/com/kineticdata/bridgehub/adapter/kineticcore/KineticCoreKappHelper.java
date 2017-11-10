@@ -13,9 +13,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.codec.binary.Base64;
@@ -119,8 +121,19 @@ public class KineticCoreKappHelper {
             }
             records = sortRecords(defaultOrder, records);
         } else {
-        // Creates a map out of order metadata
+          // Creates a map out of order metadata
           Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
+          // Check for any fields in the order metadata that aren't included in the field list
+          for (String field : orderParse.keySet()) {
+              if (!request.getFields().contains(field)) {
+                  // If any fields are hit that are in the sort metadata and not the field list,
+                  // rebuild the record list while including the sort fields in the included fields
+                  Set<String> allFields = new HashSet<String>(request.getFields());
+                  allFields.addAll(orderParse.keySet());
+                  records = createRecordsFromKapps(new ArrayList<String>(allFields),kapps);
+                  break;
+              }
+          }
           records = sortRecords(orderParse, records);
         }
         
