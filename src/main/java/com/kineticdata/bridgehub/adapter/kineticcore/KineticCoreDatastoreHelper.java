@@ -25,7 +25,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -39,25 +39,25 @@ public class KineticCoreDatastoreHelper {
     private final String password;
     private final String spaceUrl;
     private final Pattern attributePattern;
-    
+
     public KineticCoreDatastoreHelper(String username, String password, String spaceUrl) {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
         this.attributePattern = Pattern.compile("(.*?)\\[(.*?)\\]");
     }
-    
+
     public static final List<String> DETAIL_FIELDS = Arrays.asList(new String[] {
         "createdAt","createdBy","notes","recordLabelExpression","updatedAt","updatedBy"
     });
-    
+
     public Count count(BridgeRequest request) throws BridgeError {
         JSONArray datastores = searchDatastores(request);
-        
+
         // Create count object
         return new Count(datastores.size());
     }
-    
+
     public Record retrieve(BridgeRequest request) throws BridgeError {
         String slug = null;
         if (request.getQuery().matches("slug=.*?(?:$|&)")) {
@@ -65,14 +65,14 @@ public class KineticCoreDatastoreHelper {
             Matcher m = p.matcher(request.getQuery());
             if (m.find()) slug = m.group(1);
         }
-        
+
         if (slug == null) throw new BridgeError(String.format("Invalid Query: Could not find a slug in the following "+
             "query '%s'. Query must be include slug={datastore slug} to retrieve a single datastore.",request.getQuery()));
 
         JSONObject datastore;
         String url = String.format("%s/app/api/v1/datastores/%s?include=details,attributes",this.spaceUrl,slug);
 
-        HttpClient client = new DefaultHttpClient();
+        HttpClient client = HttpClients.createDefault();
         HttpResponse response;
         HttpGet get = new HttpGet(url);
         get = addAuthenticationHeader(get, this.username, this.password);
@@ -87,23 +87,23 @@ public class KineticCoreDatastoreHelper {
                 throw new BridgeError("Not Found: A datastore with the slug '"+slug+"' cannot be found.");
             }
             output = EntityUtils.toString(entity);
-        } 
+        }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server."); 
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
         }
 
         JSONObject json = (JSONObject)JSONValue.parse(output);
         datastore = (JSONObject)json.get("datastore");
-        
+
         return createRecordFromDatastore(request.getFields(), datastore);
     }
-    
+
     public RecordList search(BridgeRequest request) throws BridgeError {
         JSONArray datastores = searchDatastores(request);
-        
+
         List<Record> records = createRecordsFromDatastores(request.getFields(), datastores);
-        
+
         // Sort the records because they are always returned on one page
         if (request.getMetadata("order") == null) {
             // name,type,desc assumes name ASC,type ASC,desc ASC
@@ -117,31 +117,31 @@ public class KineticCoreDatastoreHelper {
           Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
           records = sortRecords(orderParse, records);
         }
-        
+
         // Add pagination to the returned record list
         int pageToken = request.getMetadata("pageToken") == null || request.getMetadata("pageToken").isEmpty() ?
                 0 : Integer.parseInt(new String(Base64.decodeBase64(request.getMetadata("pageToken"))));
-        
+
         int limit = request.getMetadata("limit") == null || request.getMetadata("limit").isEmpty() ?
                 records.size()-pageToken : Integer.parseInt(request.getMetadata("limit"));
-        
+
         String nextPageToken = null;
         if (pageToken+limit < records.size()) nextPageToken = Base64.encodeBase64String(String.valueOf(pageToken+limit).getBytes());
-        
+
         records = records.subList(pageToken, pageToken+limit > records.size() ? records.size() : pageToken+limit);
-        
+
         Map<String,String> metadata = new LinkedHashMap<String,String>();
         metadata.put("size",String.valueOf(limit));
         metadata.put("pageToken",nextPageToken);
-        
+
         // Return the response
         return new RecordList(request.getFields(), records, metadata);
     }
-    
+
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
-    
+
     private HttpGet addAuthenticationHeader(HttpGet get, String username, String password) {
         String creds = username + ":" + password;
         byte[] basicAuthBytes = Base64.encodeBase64(creds.getBytes());
@@ -150,7 +150,7 @@ public class KineticCoreDatastoreHelper {
         return get;
     }
 
-    // A helper method used to call createRecordsFromDatastores but with a 
+    // A helper method used to call createRecordsFromDatastores but with a
     // single record instead of an array
     private Record createRecordFromDatastore(List<String> fields, JSONObject datastore) throws BridgeError {
         JSONArray jsonArray = new JSONArray();
@@ -182,12 +182,12 @@ public class KineticCoreDatastoreHelper {
     // Filter datastores was made protected for the purposes of testing
     private JSONArray searchDatastores(BridgeRequest request) throws BridgeError {
         // Initializing the Http Objects
-        HttpClient client = new DefaultHttpClient();
+        HttpClient client = HttpClients.createDefault();
         HttpResponse response;
-        
+
         // Based on the passed fields figure out if an ?include needs to be in the Url
         List<String> includes = new ArrayList<String>();
-        
+
         if (request.getQuery().contains("attributes")) includes.add("attributes");
         for (String detailField : DETAIL_FIELDS) {
             if (request.getQuery().contains(detailField)) {
@@ -195,7 +195,7 @@ public class KineticCoreDatastoreHelper {
                 break;
             }
         }
-        
+
         if (request.getFields() != null) {
             for (String field : request.getFields()) {
                 Matcher m = attributePattern.matcher(field);
@@ -208,28 +208,28 @@ public class KineticCoreDatastoreHelper {
             // If request.getFields() has a field in common with the detail fields list, include details
             if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) includes.add("details");
         }
-        
+
         String url = this.spaceUrl+"/app/api/v1/datastores";
         if (!includes.isEmpty()) url += "?include="+StringUtils.join(includes,",");
         HttpGet get = new HttpGet(url);
         get = addAuthenticationHeader(get, this.username, this.password);
-        
+
         String output = "";
         try {
             response = client.execute(get);
-            
+
             HttpEntity entity = response.getEntity();
             output = EntityUtils.toString(entity);
             logger.trace("Request response code: " + response.getStatusLine().getStatusCode());
         }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server."); 
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
         }
-        
+
         logger.trace("Starting to parse the JSON Response");
         JSONObject json = (JSONObject)JSONValue.parse(output);
-        
+
         if (response.getStatusLine().getStatusCode() != 200) {
             throw new BridgeError("Bridge Error: " + json.toJSONString());
         }
@@ -253,7 +253,7 @@ public class KineticCoreDatastoreHelper {
         if (!value.isEmpty() && value.substring(value.length() - 1).equals("%")) regex += ".*?";
         return Pattern.compile("^"+regex+"$",Pattern.CASE_INSENSITIVE);
     }
-    
+
     private List getAttributeValues(String type, String name, JSONObject datastore) throws BridgeError {
         if (!datastore.containsKey(type)) throw new BridgeError(String.format("The field '%s' cannot be found on the Datastore object",type));
         JSONArray attributes = (JSONArray)datastore.get(type);
@@ -265,10 +265,10 @@ public class KineticCoreDatastoreHelper {
         }
         return new ArrayList(); // Return an empty list if no values were found
     }
-    
+
     protected final JSONArray filterDatastores(JSONArray datastores, String query) throws BridgeError {
         String[] queryParts = query.split("&");
-        
+
         Map<String[],Object[]> queryMatchers = new HashMap<String[],Object[]>();
         // Variables used for OR query (pattern and fields)
         String pattern = null;
@@ -279,14 +279,14 @@ public class KineticCoreDatastoreHelper {
             String[] split = part.split("=");
             String field = split[0].trim();
             String value = split.length > 1 ? split[1].trim() : "";
-            
+
             Object[] matchers;
             if (field.equals("pattern")) {
                 pattern = value;
             } else if (field.equals("fields")) {
                 fields = value.split(",");
             } else {
-                // If the field isn't 'pattern' or 'fields', add the field and appropriate values 
+                // If the field isn't 'pattern' or 'fields', add the field and appropriate values
                 // to the query matcher
                 if (value.equals("true") || value.equals("false")) {
                     matchers = new Object[] { getPatternFromValue(value), Boolean.valueOf(value) };
@@ -300,12 +300,12 @@ public class KineticCoreDatastoreHelper {
                 queryMatchers.put(new String[] { field }, matchers);
             }
         }
-        
+
         // If both query and pattern are not equal to null, add the list of fields and the
         // pattern (compiled into a regex Pattern object) to the queryMatchers map
         if (pattern != null && fields != null) {
             queryMatchers.put(fields,new Object[] { Pattern.compile(".*"+Pattern.quote(pattern)+".*",Pattern.CASE_INSENSITIVE) });
-        } 
+        }
         // If both pattern & fields are not equals to null AND both pattern & fields are not
         // both null, that means that one is null and the other is not which is not an
         // allowed query.
@@ -313,7 +313,7 @@ public class KineticCoreDatastoreHelper {
             throw new BridgeError("The 'pattern' and 'fields' parameter must be provided together.  When the 'pattern' parameter "+
                     "is provided the 'fields' parameter is required and when the 'fields' parameter is provided the 'pattern' parameter is required.");
         }
-        
+
         // Start with a full list of users and then delete from the list when they don't match
         // a qualification. Will be left with a list of values that match all qualifications.
         JSONArray matchedDatastores = datastores;
@@ -350,7 +350,7 @@ public class KineticCoreDatastoreHelper {
                                            value.getClass() == Pattern.class && ((Pattern)value).matcher(fieldValue.toString()).matches() || // fieldValue != null && Pattern matches
                                            value.equals(fieldValue) // fieldValue != null && values equal
                                        )
-                                    ) { 
+                                    ) {
                                         matchedDatastoresEntry.add(o);
                                     }
                                 }
@@ -361,10 +361,10 @@ public class KineticCoreDatastoreHelper {
             }
             matchedDatastores = (JSONArray)matchedDatastoresEntry;
         }
-        
+
         return matchedDatastores;
     }
-    
+
     protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {
         Collections.sort(records, new Comparator<Record>() {
             @Override
