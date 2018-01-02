@@ -8,11 +8,13 @@ import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
 import static com.kineticdata.bridgehub.adapter.kineticcore.KineticCoreAdapter.logger;
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,12 +43,14 @@ public class KineticCoreSubmissionHelper {
     private final String password;
     private final String spaceUrl;
     private final Pattern fieldPattern;
+    private final Pattern attributePattern;
 
     public KineticCoreSubmissionHelper(String username, String password, String spaceUrl) {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
         this.fieldPattern = Pattern.compile("(\\S+)\\[(.*?)\\]");
+        this.attributePattern = Pattern.compile("(.*?)\\[(.*?)\\]");
     }
 
     public Count count(BridgeRequest request) throws BridgeError {
@@ -215,6 +219,7 @@ public class KineticCoreSubmissionHelper {
         // Retrieving the slugs for the kapp and form slug that were passed in the query
         String kappSlug = null;
         String formSlug = null;
+        String parentId = null;
         List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
             String[] str_array = indvQueryPart.split("=");
@@ -223,32 +228,39 @@ public class KineticCoreSubmissionHelper {
             if (str_array.length > 1) value = str_array[1].trim();
             if (field.equals("formSlug")) { formSlug = value; }
             else if (field.equals("kappSlug")) { kappSlug = value; }
+            else if (field.equals("parent")) { parentId = value; }
             else if (!field.equals("limit")) { // ignore the limit, because count always uses the default limit
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
             }
         }
-        queryPartsList.add("limit=1000");
-        String query = StringUtils.join(queryPartsList,"&");
 
-        if (kappSlug == null) {
-            throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
-        }
-
-
-        // Make sure that the pageToken isn't null for the first pass.
-        String nextToken = pageToken != null ? pageToken : "";
-        while (nextToken != null) {
-            // the token query is used to reset the query each time so that multiple pageTokens
-            // aren't added to the query after multiple passes
-            String tokenQuery = query;
-            // if nextToken is empty, don't add to query (only relevant on first pass)
-            if (!nextToken.isEmpty()) {
-                tokenQuery = tokenQuery+"&pageToken="+nextToken;
+        if (parentId == null) {
+            if (kappSlug == null) {
+                throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
             }
-            JSONObject json = searchSubmissions(kappSlug, formSlug, tokenQuery);
-            nextToken = (String)json.get("nextPageToken");
-            JSONArray submissions = (JSONArray)json.get("submissions");
-            count += submissions.size();
+            
+            queryPartsList.add("limit=1000");
+            String query = StringUtils.join(queryPartsList,"&");
+
+            // Make sure that the pageToken isn't null for the first pass.
+            String nextToken = pageToken != null ? pageToken : "";
+            while (nextToken != null) {
+                // the token query is used to reset the query each time so that multiple pageTokens
+                // aren't added to the query after multiple passes
+                String tokenQuery = query;
+                // if nextToken is empty, don't add to query (only relevant on first pass)
+                if (!nextToken.isEmpty()) {
+                    tokenQuery = tokenQuery+"&pageToken="+nextToken;
+                }
+                JSONObject json = searchSubmissions(kappSlug, formSlug, tokenQuery);
+                nextToken = (String)json.get("nextPageToken");
+                JSONArray submissions = (JSONArray)json.get("submissions");
+                count += submissions.size();
+            }
+        } else {
+            JSONArray children = getChildren(parentId);
+            children = filterSubmissions(children,URLDecoder.decode(StringUtils.join(queryPartsList,"&")));
+            count = children.size();
         }
 
         return count;
@@ -280,6 +292,7 @@ public class KineticCoreSubmissionHelper {
         // Retrieving the slugs for the kapp and form slug that were passed in the query
         String kappSlug = null;
         String formSlug = null;
+        String parentId = null;
         String limit = null;
         List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
@@ -289,37 +302,49 @@ public class KineticCoreSubmissionHelper {
             if (str_array.length > 1) value = StringUtils.join(Arrays.copyOfRange(str_array, 1, str_array.length),"=");
             if (field.equals("formSlug")) { formSlug = value; }
             else if (field.equals("kappSlug")) { kappSlug = value; }
+            else if (field.equals("parent")) { parentId = value; }
             else if (field.equals("limit")) { limit = value; }
             else {
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value.trim()));
             }
         }
-        // Add the include statement to get extra values and details
-        queryPartsList.add("include=values,details");
+        
+        if (parentId == null) {
+            // Add the include statement to get extra values and details
+            queryPartsList.add("include=values,details");
 
-        // Add a limit to the query by either using the value that was passed, or defaulting limit=200
-        String pageSize = request.getMetadata("pageSize");
-        if (pageSize != null) {
-            queryPartsList.add("limit="+pageSize);
-        } else if (limit != null && !limit.isEmpty()) {
-            queryPartsList.add("limit="+limit);
+            // Add a limit to the query by either using the value that was passed, or defaulting limit=200
+            String pageSize = request.getMetadata("pageSize");
+            if (pageSize != null) {
+                queryPartsList.add("limit="+pageSize);
+            } else if (limit != null && !limit.isEmpty()) {
+                queryPartsList.add("limit="+limit);
+            } else {
+                queryPartsList.add("limit=1000");
+            }
+
+            // If metadata[nextPageToken] is included in the request, add it to the query
+            if (request.getMetadata("pageToken") != null) {
+                queryPartsList.add("pageToken="+request.getMetadata("pageToken"));
+            }
+
+            // Join the query list into a query string
+            String query = StringUtils.join(queryPartsList,"&");
+
+            if (kappSlug == null) {
+                throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
+            }
+
+            return searchSubmissions(kappSlug, formSlug, query);
         } else {
-            queryPartsList.add("limit=1000");
+            // Create a sample JSONObject submissions return object containing a submissions array (the
+            // result of the getChildren call) and a nextPageToken (always set to null) so that the logic in the
+            // search method determining if a submission set is a single page is still valid
+            Map<String,Object> json = new HashMap<String,Object>();
+            json.put("nextPageToken",null);
+            json.put("submissions",filterSubmissions(getChildren(parentId),URLDecoder.decode(StringUtils.join(queryPartsList,"&"))));
+            return new JSONObject(json);
         }
-
-        // If metadata[nextPageToken] is included in the request, add it to the query
-        if (request.getMetadata("pageToken") != null) {
-            queryPartsList.add("pageToken="+request.getMetadata("pageToken"));
-        }
-
-        // Join the query list into a query string
-        String query = StringUtils.join(queryPartsList,"&");
-
-        if (kappSlug == null) {
-            throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
-        }
-
-        return searchSubmissions(kappSlug, formSlug, query);
     }
 
     private JSONObject searchSubmissions(String kapp, String form, String query) throws BridgeError {
@@ -368,6 +393,43 @@ public class KineticCoreSubmissionHelper {
 
         return json;
     }
+    
+    private JSONArray getChildren(String parentId) throws BridgeError {
+        // Initializing the Http Objects
+        HttpClient client = HttpClients.createDefault();
+        HttpResponse response;
+        String url = String.format("%s/app/api/v1/submissions/%s?include=children.details,children.values,children.form",this.spaceUrl,parentId);
+        
+        HttpGet get = new HttpGet(url);
+        get = addAuthenticationHeader(get, this.username, this.password);
+
+        String output = "";
+        try {
+            response = client.execute(get);
+
+            HttpEntity entity = response.getEntity();
+            output = EntityUtils.toString(entity);
+            logger.trace("Request response code: " + response.getStatusLine().getStatusCode());
+        }
+        catch (IOException e) {
+            logger.error(e.getMessage());
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
+        }
+
+        logger.trace("Starting to parse the JSON Response");
+        JSONObject json = (JSONObject)JSONValue.parse(output);
+
+        if (response.getStatusLine().getStatusCode() == 404) {
+            throw new BridgeError("Invalid parent id: " + json.get("error").toString());
+        } else if (response.getStatusLine().getStatusCode() != 200) {
+            String errorMessage = json.containsKey("error") ? json.get("error").toString() : json.toJSONString();
+            throw new BridgeError("Bridge Error: " + errorMessage);
+        }
+        
+        JSONObject submission = (JSONObject)json.get("submission");
+        JSONArray children = (JSONArray)submission.get("children");
+        return children;
+    }
 
     protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {
         Collections.sort(records, new Comparator<Record>() {
@@ -396,5 +458,146 @@ public class KineticCoreSubmissionHelper {
             }
         });
         return records;
+    }
+    
+    private Pattern getPatternFromValue(String value) {
+        // Escape regex characters from value
+        String[] parts = value.split("(?<!\\\\)%");
+        for (int i = 0; i<parts.length; i++) {
+            if (!parts[i].isEmpty()) parts[i] = Pattern.quote(parts[i].replaceAll("\\\\%","%"));
+        }
+        String regex = StringUtils.join(parts,".*?");
+        if (!value.isEmpty() && value.substring(value.length() - 1).equals("%")) regex += ".*?";
+        return Pattern.compile("^"+regex+"$",Pattern.CASE_INSENSITIVE);
+    }
+
+    private Object getChildValues(String type, String name, JSONObject submission) throws BridgeError {
+        if (!submission.containsKey(type)) throw new BridgeError(String.format("The field '%s' cannot be found on the Submission object",type));
+        Object child = submission.get(type);
+        if (child instanceof JSONArray) {
+            JSONArray attributes = (JSONArray)child;
+            for (Object attribute : attributes) {
+                HashMap attributeMap = (HashMap)attribute;
+                if (((String)attributeMap.get("name")).equals(name)) {
+                    return (List)attributeMap.get("values");
+                }
+            }
+            return new ArrayList(); // Return an empty array list if nothing else was returned
+        } else if (child instanceof JSONObject) {
+            JSONObject values = (JSONObject)child;
+            return values.get(name);
+        } else {
+            return child;
+        }
+    }
+    
+    protected final JSONArray filterSubmissions(JSONArray submissions, String query) throws BridgeError {
+        if (query.isEmpty()) return submissions;
+        String[] queryParts = query.split("&");
+
+        Map<String[],Object[]> queryMatchers = new HashMap<String[],Object[]>();
+        // Variables used for OR query (pattern and fields)
+        String pattern = null;
+        String[] fields = null;
+        // Iterate through the query parts and create all the possible matchers to check against
+        // the user results
+        for (String part : queryParts) {
+            String[] split = part.split("=");
+            String field = split[0].trim();
+            String value = split.length > 1 ? split[1].trim() : "";
+
+            Object[] matchers;
+            if (field.equals("pattern")) {
+                pattern = value;
+            } else if (field.equals("fields")) {
+                fields = value.split(",");
+            } else {
+                // If the field isn't 'pattern' or 'fields', add the field and appropriate values
+                // to the query matcher
+                if (value.equals("true") || value.equals("false")) {
+                    matchers = new Object[] { getPatternFromValue(value), Boolean.valueOf(value) };
+                } else if (value.equals("null")) {
+                    matchers = new Object[] { null, getPatternFromValue(value) };
+                } else if (value.isEmpty()) {
+                    matchers = new Object[] { "" };
+                } else {
+                    matchers = new Object[] { getPatternFromValue(value) };
+                }
+                queryMatchers.put(new String[] { field }, matchers);
+            }
+        }
+
+        // If both query and pattern are not equal to null, add the list of fields and the
+        // pattern (compiled into a regex Pattern object) to the queryMatchers map
+        if (pattern != null && fields != null) {
+            queryMatchers.put(fields,new Object[] { Pattern.compile(".*"+Pattern.quote(pattern)+".*",Pattern.CASE_INSENSITIVE) });
+        }
+        // If both pattern & fields are not equals to null AND both pattern & fields are not
+        // both null, that means that one is null and the other is not which is not an
+        // allowed query.
+        else if (pattern != null || fields != null) {
+            throw new BridgeError("The 'pattern' and 'fields' parameter must be provided together.  When the 'pattern' parameter "+
+                    "is provided the 'fields' parameter is required and when the 'fields' parameter is provided the 'pattern' parameter is required.");
+        }
+
+        // Start with a full list of submissions and then delete from the list when they don't match
+        // a qualification. Will be left with a list of values that match all qualifications.
+        JSONArray matchedSubmissions = submissions;
+        for (Map.Entry<String[],Object[]> entry : queryMatchers.entrySet()) {
+            JSONArray matchedSubmissionsEntry = new JSONArray();
+            for (String field : entry.getKey()) {
+                // If passed in field is an attribute, save its attributeName
+                String attributeType = null;
+                String attributeName = null;
+                Matcher m = this.attributePattern.matcher(field);
+                if (m.find()) {
+                    attributeType = m.group(1);
+                    attributeName = m.group(2);
+                }
+
+                for (Object o : matchedSubmissions) {
+                    JSONObject submission = (JSONObject)o;
+                    // Check if the object matches the field qualification if it hasn't already been
+                    // successfully matched
+                    if (!matchedSubmissionsEntry.contains(o)) {
+                        // Get the value for the field
+                        List fieldValues;
+                        if (attributeName != null) {
+                            Object childValues = getChildValues(attributeType,attributeName,submission);
+                            if (childValues instanceof List) {
+                                fieldValues = (List)childValues;
+                            } else {
+                                fieldValues = Arrays.asList(new Object[] { childValues });
+                            }
+                        } else {
+                            fieldValues = Arrays.asList(new Object[] { submission.get(field) });
+                        }
+
+                        // if field values is empty, check for an empty value
+                        if (fieldValues.isEmpty()) {
+                            for (Object value : entry.getValue()) {
+                                if (value.equals("")) matchedSubmissionsEntry.add(o);
+                            }
+                        } else {
+                            for (Object fieldValue : fieldValues) {
+                                for (Object value : entry.getValue()) {
+                                    if (fieldValue == value || // Objects equal
+                                       fieldValue != null && value != null && (
+                                           value.getClass() == Pattern.class && ((Pattern)value).matcher(fieldValue.toString()).matches() || // fieldValue != null && Pattern matches
+                                           value.equals(fieldValue) // fieldValue != null && values equal
+                                       )
+                                    ) {
+                                        matchedSubmissionsEntry.add(o);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            matchedSubmissions = (JSONArray)matchedSubmissionsEntry;
+        }
+
+        return matchedSubmissions;
     }
 }
