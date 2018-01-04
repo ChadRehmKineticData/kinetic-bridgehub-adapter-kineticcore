@@ -34,13 +34,13 @@ import org.json.simple.JSONValue;
 /**
  *
  */
-public class KineticCoreRecordHelper {
+public class KineticCoreDatastoreSubmissionHelper {
     private final String username;
     private final String password;
     private final String spaceUrl;
     private final Pattern fieldPattern;
 
-    public KineticCoreRecordHelper(String username, String password, String spaceUrl) {
+    public KineticCoreDatastoreSubmissionHelper(String username, String password, String spaceUrl) {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
@@ -48,7 +48,7 @@ public class KineticCoreRecordHelper {
     }
 
     public Count count(BridgeRequest request) throws BridgeError {
-       Integer count = countDatastoreRecords(request,null);
+       Integer count = countDatastoreSubmissions(request,null);
 
         return new Count(count);
     }
@@ -65,18 +65,18 @@ public class KineticCoreRecordHelper {
         String url;
         JSONObject record;
         if (recordId == null) {
-            JSONObject response = searchDatastoreRecords(request);
-            JSONArray records = (JSONArray)response.get("records");
+            JSONObject response = searchDatastoreSubmissions(request);
+            JSONArray submissions = (JSONArray)response.get("submissions");
 
-            if (records.size() > 1) {
+            if (submissions.size() > 1) {
                 throw new BridgeError("Multiple results matched an expected single match query");
-            } else if (records.isEmpty()) {
+            } else if (submissions.isEmpty()) {
                 record = null;
             } else {
-                record = (JSONObject)records.get(0);
+                record = (JSONObject)submissions.get(0);
             }
         } else {
-            url = String.format("%s/app/api/v1/records/%s?include=values,details",this.spaceUrl,recordId);
+            url = String.format("%s/app/api/v1/datastore/submissions/%s?include=values,details",this.spaceUrl,recordId);
 
             HttpClient client = HttpClients.createDefault();
             HttpResponse response;
@@ -96,7 +96,7 @@ public class KineticCoreRecordHelper {
             }
             catch (IOException e) {
                 logger.error(e.getMessage());
-                throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
+                throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
             }
 
             JSONObject json = (JSONObject)JSONValue.parse(output);
@@ -109,10 +109,10 @@ public class KineticCoreRecordHelper {
     public RecordList search(BridgeRequest request) throws BridgeError {
         // Initialize the metadata variable that will be returned
         Map<String,String> metadata = new LinkedHashMap<String,String>();
-        JSONObject response = searchDatastoreRecords(request);
-        JSONArray datastoreRecords = (JSONArray)response.get("records");
+        JSONObject response = searchDatastoreSubmissions(request);
+        JSONArray datastoreSubmissions = (JSONArray)response.get("submissions");
 
-        List<Record> records = createRecordsFromDatastoreRecords(request.getFields(), datastoreRecords);
+        List<Record> records = createRecordsFromDatastoreSubmissions(request.getFields(), datastoreSubmissions);
 
         // Sort the records if they are all returned in a second page
         if (request.getMetadata("order") == null && response.get("nextPageToken") == null) {
@@ -121,14 +121,14 @@ public class KineticCoreRecordHelper {
             for (String field : request.getFields()) {
                 defaultOrder.put(field, "ASC");
             }
-            records = sortRecords(defaultOrder, records);
+            records = sortDatastoreSubmissions(defaultOrder, records);
         } else if (response.get("nextPageToken") == null) {
         // Creates a map out of order metadata
           Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
-          records = sortRecords(orderParse, records);
+          records = sortDatastoreSubmissions(orderParse, records);
         } else {
-            metadata.put("warning","Records won't be ordered because there is more than one page of results returned.");
-            logger.debug("Warning: Records won't be ordered because there is more than one page of results returned.");
+            metadata.put("warning","Datastore Submissions won't be ordered because there is more than one page of results returned.");
+            logger.debug("Warning: Datastore Submissions won't be ordered because there is more than one page of results returned.");
         }
 
         metadata.put("size", String.valueOf(records.size()));
@@ -150,21 +150,21 @@ public class KineticCoreRecordHelper {
         return get;
     }
 
-    // A helper method used to call createRecordsFromDatastoreRecords but with a
+    // A helper method used to call createRecordsFromDatastoreSubmissions but with a
     // single record instead of an array
     private Record createRecordFromDatastoreRecord(List<String> fields, JSONObject datastoreRecord) throws BridgeError {
         Record record;
         if (datastoreRecord != null) {
             JSONArray jsonArray = new JSONArray();
             jsonArray.add(datastoreRecord);
-            record = createRecordsFromDatastoreRecords(fields,jsonArray).get(0);
+            record = createRecordsFromDatastoreSubmissions(fields,jsonArray).get(0);
         } else {
             record = new Record();
         }
         return record;
     }
 
-    private List<Record> createRecordsFromDatastoreRecords(List<String> fields, JSONArray datastoreRecords) throws BridgeError {
+    private List<Record> createRecordsFromDatastoreSubmissions(List<String> fields, JSONArray datastoreSubmissions) throws BridgeError {
         // Create 'searchable' field list. If there needs to be a multi-level
         // search (aka, values[Group]) the field's type will be List<String>
         // instead of just String
@@ -183,7 +183,7 @@ public class KineticCoreRecordHelper {
 
         // Go through the records in the JSONArray to create a list of records
         List<Record> records = new ArrayList<Record>();
-        for (Object o : datastoreRecords) {
+        for (Object o : datastoreSubmissions) {
             records.add(new Record((Map)o));
         }
 
@@ -193,19 +193,19 @@ public class KineticCoreRecordHelper {
         return records;
     }
 
-    private Integer countDatastoreRecords(BridgeRequest request, String pageToken) throws BridgeError {
+    private Integer countDatastoreSubmissions(BridgeRequest request, String pageToken) throws BridgeError {
         Integer count = 0;
         String[] indvQueryParts = request.getQuery().split("&");
 
         // Retrieving the datastore slug that was passed in the query
-        String datastoreSlug = null;
+        String formSlug = null;
         List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
             String[] str_array = indvQueryPart.split("=");
             String field = str_array[0].trim();
             String value = "";
             if (str_array.length > 1) value = str_array[1].trim();
-            if (field.equals("datastoreSlug")) { datastoreSlug = value; }
+            if (field.equals("formSlug")) { formSlug = value; }
             else if (!field.equals("limit")) { // ignore the limit, because count always uses the default limit
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
             }
@@ -213,8 +213,8 @@ public class KineticCoreRecordHelper {
         queryPartsList.add("limit=1000");
         String query = StringUtils.join(queryPartsList,"&");
 
-        if (datastoreSlug == null) {
-            throw new BridgeError("Invalid Request: The bridge query needs to include a datastoreSlug.");
+        if (formSlug == null) {
+            throw new BridgeError("Invalid Request: The bridge query needs to include a formSlug.");
         }
 
 
@@ -228,20 +228,20 @@ public class KineticCoreRecordHelper {
             if (!nextToken.isEmpty()) {
                 tokenQuery = tokenQuery+"&pageToken="+nextToken;
             }
-            JSONObject json = searchDatastoreRecords(datastoreSlug, tokenQuery);
+            JSONObject json = searchDatastoreSubmissions(formSlug, tokenQuery);
             nextToken = (String)json.get("nextPageToken");
-            JSONArray records = (JSONArray)json.get("records");
-            count += records.size();
+            JSONArray submissions = (JSONArray)json.get("submissions");
+            count += submissions.size();
         }
 
         return count;
     }
 
-    private JSONObject searchDatastoreRecords(BridgeRequest request) throws BridgeError {
+    private JSONObject searchDatastoreSubmissions(BridgeRequest request) throws BridgeError {
         String[] indvQueryParts = request.getQuery().split("&(?=[^&]*?=)");
 
-        // Retrieving the datastore slug that was passed in the query
-        String datastoreSlug = null;
+        // Retrieving the form slug that was passed in the query
+        String formSlug = null;
         String limit = null;
         List<String> queryPartsList = new ArrayList<String>();
         for (String indvQueryPart : indvQueryParts) {
@@ -249,7 +249,7 @@ public class KineticCoreRecordHelper {
             String field = str_array[0].trim();
             String value = "";
             if (str_array.length > 1) value = StringUtils.join(Arrays.copyOfRange(str_array, 1, str_array.length),"=");
-            if (field.equals("datastoreSlug")) { datastoreSlug = value; }
+            if (field.equals("formSlug")) { formSlug = value; }
             else if (field.equals("limit")) { limit = value; }
             else {
                 queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value.trim()));
@@ -276,20 +276,20 @@ public class KineticCoreRecordHelper {
         // Join the query list into a query string
         String query = StringUtils.join(queryPartsList,"&");
 
-        if (datastoreSlug == null) {
-            throw new BridgeError("Invalid Request: The bridge query needs to include a datastoreSlug.");
+        if (formSlug == null) {
+            throw new BridgeError("Invalid Request: The bridge query needs to include a formSlug.");
         }
 
-        return searchDatastoreRecords(datastoreSlug, query);
+        return searchDatastoreSubmissions(formSlug, query);
     }
 
-    private JSONObject searchDatastoreRecords(String datastore, String query) throws BridgeError {
+    private JSONObject searchDatastoreSubmissions(String datastore, String query) throws BridgeError {
         // Initializing the Http Objects
         HttpClient client = HttpClients.createDefault();
         HttpResponse response;
 
-        // Build the records api url. Url is different based on whether the form slug has been included.
-        String url = String.format("%s/app/api/v1/datastores/%s/records?%s",this.spaceUrl,datastore,query);
+        // Build the datastore submissions api url. Url is different based on whether the form slug has been included.
+        String url = String.format("%s/app/api/v1/datastore/forms/%s/submissions?%s",this.spaceUrl,datastore,query);
         HttpGet get = new HttpGet(url);
         get = addAuthenticationHeader(get, this.username, this.password);
 
@@ -303,14 +303,14 @@ public class KineticCoreRecordHelper {
         }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
         }
 
         logger.trace("Starting to parse the JSON Response");
         JSONObject json = (JSONObject)JSONValue.parse(output);
 
         if (response.getStatusLine().getStatusCode() == 404) {
-            throw new BridgeError("Invalid datastoreSlug: " + json.get("error").toString());
+            throw new BridgeError("Invalid formSlug: " + json.get("error").toString());
         } else if (response.getStatusLine().getStatusCode() != 200) {
             String errorMessage = json.containsKey("error") ? json.get("error").toString() : json.toJSONString();
             throw new BridgeError("Bridge Error: " + errorMessage);
@@ -319,7 +319,7 @@ public class KineticCoreRecordHelper {
         JSONArray messages = (JSONArray)json.get("messages");
 
         if (!messages.isEmpty()) {
-            logger.trace("Message from the Records API for the follwing query: "+query+"\n"+StringUtils.join(messages,"; "));
+            logger.trace("Message from the Datastore Submissions API for the follwing query: "+query+"\n"+StringUtils.join(messages,"; "));
         }
 
         return json;
@@ -345,8 +345,8 @@ public class KineticCoreRecordHelper {
         return result;
     }
 
-    protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {
-        Collections.sort(records, new Comparator<Record>() {
+    protected List<Record> sortDatastoreSubmissions(final Map<String,String> fieldParser, List<Record> submissions) throws BridgeError {
+        Collections.sort(submissions, new Comparator<Record>() {
             @Override
             public int compare(Record r1, Record r2){
                 CompareToBuilder comparator = new CompareToBuilder();
@@ -356,10 +356,10 @@ public class KineticCoreRecordHelper {
                     String order = entry.getValue();
 
                     Object o1 = r1.getValue(field);
-                    if (o1 != null) { o1 = KineticCoreRecordHelper.toString(o1).toLowerCase(); }
+                    if (o1 != null) { o1 = KineticCoreDatastoreSubmissionHelper.toString(o1).toLowerCase(); }
 
                     Object o2 = r2.getValue(field);
-                    if (o2 != null) { o2 = KineticCoreRecordHelper.toString(o2).toLowerCase(); }
+                    if (o2 != null) { o2 = KineticCoreDatastoreSubmissionHelper.toString(o2).toLowerCase(); }
 
                     if (order.equals("DESC")) {
                         comparator.append(o2,o1);
@@ -371,6 +371,6 @@ public class KineticCoreRecordHelper {
                 return comparator.toComparison();
             }
         });
-        return records;
+        return submissions;
     }
 }
