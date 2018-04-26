@@ -197,7 +197,7 @@ public class KineticCoreSubmissionHelper {
         
         if (metadata != null) {
             for (Map.Entry<String,String> param : metadata.entrySet()) {
-                url += param.getKey()+"="+param.getValue()+"&";
+                if (!param.getKey().equals("order")) url += param.getKey()+"="+param.getValue()+"&";
             }
         }
 

@@ -59,7 +59,7 @@ public class KineticCoreQualificationParser extends QualificationParser {
         }
         // Add both to the parsedQuery map
         parsedQuery.put("query",queryString.toString());
-        parsedQuery.put("encodedQuery",queryString.toString());
+        parsedQuery.put("encodedQuery",encodedQueryString.toString());
         return parsedQuery;
     }
 }
