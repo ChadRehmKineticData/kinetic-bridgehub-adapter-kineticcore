@@ -4,13 +4,13 @@
 
   <groupId>com.kineticdata.bridges.adapter</groupId>
   <artifactId>kinetic-bridgehub-adapter-kineticcore</artifactId>
-  <version>1.0.5-SNAPSHOT</version>
+  <version>1.0.5</version>
   <packaging>jar</packaging>
 
   <name>kinetic-bridgehub-adapter-kineticcore</name>
   <scm>
-      <connection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-kineticcore.git</connection>
-      <developerConnection>scm:git:https://github.com/kineticcommunity/kinetic-bridgehub-adapter-kineticcore.git</developerConnection>
+      <connection>scm:git:https://github.com/kineticdata/kinetic-bridgehub-adapter-kineticcore.git</connection>
+      <developerConnection>scm:git:https://github.com/kineticdata/kinetic-bridgehub-adapter-kineticcore.git</developerConnection>
   </scm>
   <url>http://maven.apache.org</url>
 
