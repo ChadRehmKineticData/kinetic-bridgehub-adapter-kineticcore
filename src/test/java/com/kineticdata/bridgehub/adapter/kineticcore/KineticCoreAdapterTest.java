@@ -5,7 +5,9 @@ import com.kineticdata.bridgehub.adapter.BridgeAdapterTestBase;
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
 import com.kineticdata.bridgehub.adapter.Record;
+import com.kineticdata.bridgehub.adapter.RecordList;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 import org.junit.Test;
 
 /**
@@ -34,6 +37,64 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     @Override
     public Class getAdapterClass() {
         return KineticCoreAdapter.class;
+    }
+    
+    @Test
+    public void test_paginationToken() {
+        // Turn off testing pagination through the BridgeAdapterTestBase and test it manually
+        // because the bridges uses limit and not pageSize
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure(getStructure());
+        request.setFields(getFields());
+        
+        // A multiple value query and a pageSize=1 should always return a nextPageToken
+        request.setQuery(getMultipleValueQuery());
+        
+        Map<String,String> metadata = new HashMap<String,String>();
+        metadata.put("limit","1");
+        
+        request.setMetadata(metadata);
+        
+        BridgeError error = null;
+        RecordList recordList = null;
+        try {
+            recordList = getAdapter().search(request);
+        } catch (BridgeError e) { error = e; }
+        
+        String pageToken = recordList.getMetadata().get("nextPageToken");
+        
+        assertNull(error);
+        assertNotNull(pageToken);
+        
+        // Passing the nextPageToken as pageToken should pass the next page
+        metadata = new HashMap<String,String>();
+        metadata.put("limit","1");
+        metadata.put("pageToken",pageToken);
+        
+        request.setMetadata(metadata);
+        
+        error = null;
+        recordList = null;
+        try {
+            recordList = getAdapter().search(request);
+        } catch (BridgeError e) { error = e; }
+        
+        assertNull(error);
+        assertTrue("Second page of limit=1 and a pageToken with a multiple search result should not be empty",
+                !recordList.getRecords().isEmpty());
+        
+        // A single value query should always return an empty or null nextPageToken
+        request.setQuery(getSingleValueQuery());
+        request.setMetadata(new HashMap<String,String>());
+        
+        error = null;
+        recordList = null;
+        try {
+            recordList = getAdapter().search(request);
+        } catch (BridgeError e) { error = e; }
+               
+        assertNull(error);
+        assertNull(recordList.getMetadata().get("nextPageToken"));
     }
     
     @Test

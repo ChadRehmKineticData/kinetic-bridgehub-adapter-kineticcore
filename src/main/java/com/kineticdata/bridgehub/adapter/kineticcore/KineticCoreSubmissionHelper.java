@@ -126,6 +126,13 @@ public class KineticCoreSubmissionHelper {
 
     public RecordList search(BridgeRequest request) throws BridgeError {
         Map<String,String> metadata = new HashMap<String,String>();
+        
+        // Default the limit to 1000 unless limit
+        if (request.getMetadata() == null || !request.getMetadata().containsKey("limit")) {
+            Map<String,String> inputMeta = request.getMetadata() == null ? new HashMap<String,String>() : request.getMetadata();
+            inputMeta.put("limit", "1000");
+            request.setMetadata(inputMeta);
+        }
 
         // Parse the query
         Map<String,String> parsedQuery = this.qualificationParser.parseSubmissionQuery(request);
@@ -191,13 +198,14 @@ public class KineticCoreSubmissionHelper {
                 : String.format("%s/app/api/v1/submissions/%s?include=descendants.details,descendants.values,descendants.form,descendants.form.kapp",this.spaceUrl,query.get("ancestor"));
         } else {
             url = query.containsKey("formSlug")
-                ? String.format("%s/app/api/v1/kapps/%s/forms/%s/submissions?include=details,values&%s",this.spaceUrl,query.get("kappSlug"),query.get("formSlug"),query.get("encodedQuery"))
-                : String.format("%s/app/api/v1/kapps/%s/submissions?include=details,values&%s",this.spaceUrl,query.get("kappSlug"),query.get("encodedQuery"));
+                ? String.format("%s/app/api/v1/kapps/%s/forms/%s/submissions?include=details,values",this.spaceUrl,query.get("kappSlug"),query.get("formSlug"))
+                : String.format("%s/app/api/v1/kapps/%s/submissions?include=details,values",this.spaceUrl,query.get("kappSlug"));
+            if (!query.get("encodedQuery").isEmpty()) url += "&"+query.get("encodedQuery");
         }
         
         if (metadata != null) {
             for (Map.Entry<String,String> param : metadata.entrySet()) {
-                if (!param.getKey().equals("order")) url += param.getKey()+"="+param.getValue()+"&";
+                if (!param.getKey().equals("order")) url = url+"&"+param.getKey()+"="+param.getValue();
             }
         }
 

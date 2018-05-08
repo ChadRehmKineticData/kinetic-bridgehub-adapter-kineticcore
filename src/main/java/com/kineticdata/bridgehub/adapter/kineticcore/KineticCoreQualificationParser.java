@@ -45,9 +45,13 @@ public class KineticCoreQualificationParser extends QualificationParser {
             if (SUBMISSION_QUERY_PARSE_FIELDS.contains(field)) {
                 parsedQuery.put(field,value);
             } else {
-                queryString.append(field).append("=").append(value.trim()).append("&");
+                if (queryString.length() != 0) {
+                    queryString.append("&");
+                    encodedQueryString.append("&");
+                }
+                queryString.append(field).append("=").append(value.trim());
                 encodedQueryString.append(URLEncoder.encode(field)).append("=");
-                encodedQueryString.append(URLEncoder.encode(value.trim())).append("&");
+                encodedQueryString.append(URLEncoder.encode(value.trim()));
             }
         }
         // Throw any errors that have been caught during the parsing of the query
