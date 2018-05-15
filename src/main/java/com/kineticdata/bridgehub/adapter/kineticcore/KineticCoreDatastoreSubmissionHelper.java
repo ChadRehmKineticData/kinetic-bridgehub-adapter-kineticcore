@@ -100,7 +100,7 @@ public class KineticCoreDatastoreSubmissionHelper {
             }
 
             JSONObject json = (JSONObject)JSONValue.parse(output);
-            record = (JSONObject)json.get("record");
+            record = (JSONObject)json.get("submission");
         }
 
         return createRecordFromDatastoreRecord(request.getFields(), record);
