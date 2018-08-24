@@ -70,12 +70,10 @@ public class KineticCoreSubmissionHelper {
 
     public Record retrieve(BridgeRequest request) throws BridgeError {
         String submissionId = null;
-        Pattern p = Pattern.compile("id=(.*?)(?:$|&)",Pattern.CASE_INSENSITIVE);
+        Pattern p = Pattern.compile("id=([^&]+)",Pattern.CASE_INSENSITIVE);
         Matcher m = p.matcher(request.getQuery());
         if (m.matches()) {
-            if (m.find()) {
-                submissionId = m.group(1);
-            }
+            submissionId = m.group(1);
         }
 
         String url;
