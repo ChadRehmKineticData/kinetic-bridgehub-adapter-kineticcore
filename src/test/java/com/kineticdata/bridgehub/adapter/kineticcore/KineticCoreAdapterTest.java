@@ -4,14 +4,19 @@ import com.kineticdata.bridgehub.adapter.BridgeAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeAdapterTestBase;
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
+import com.kineticdata.bridgehub.adapter.Count;
 import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import org.apache.http.NameValuePair;
+import org.apache.http.message.BasicNameValuePair;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
@@ -19,7 +24,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeTrue;
 import org.junit.Test;
 
 /**
@@ -37,64 +41,6 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     @Override
     public Class getAdapterClass() {
         return KineticCoreAdapter.class;
-    }
-    
-    @Test
-    public void test_paginationToken() {
-        // Turn off testing pagination through the BridgeAdapterTestBase and test it manually
-        // because the bridges uses limit and not pageSize
-        BridgeRequest request = new BridgeRequest();
-        request.setStructure(getStructure());
-        request.setFields(getFields());
-        
-        // A multiple value query and a pageSize=1 should always return a nextPageToken
-        request.setQuery(getMultipleValueQuery());
-        
-        Map<String,String> metadata = new HashMap<String,String>();
-        metadata.put("limit","1");
-        
-        request.setMetadata(metadata);
-        
-        BridgeError error = null;
-        RecordList recordList = null;
-        try {
-            recordList = getAdapter().search(request);
-        } catch (BridgeError e) { error = e; }
-        
-        String pageToken = recordList.getMetadata().get("nextPageToken");
-        
-        assertNull(error);
-        assertNotNull(pageToken);
-        
-        // Passing the nextPageToken as pageToken should pass the next page
-        metadata = new HashMap<String,String>();
-        metadata.put("limit","1");
-        metadata.put("pageToken",pageToken);
-        
-        request.setMetadata(metadata);
-        
-        error = null;
-        recordList = null;
-        try {
-            recordList = getAdapter().search(request);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        assertTrue("Second page of limit=1 and a pageToken with a multiple search result should not be empty",
-                !recordList.getRecords().isEmpty());
-        
-        // A single value query should always return an empty or null nextPageToken
-        request.setQuery(getSingleValueQuery());
-        request.setMetadata(new HashMap<String,String>());
-        
-        error = null;
-        recordList = null;
-        try {
-            recordList = getAdapter().search(request);
-        } catch (BridgeError e) { error = e; }
-               
-        assertNull(error);
-        assertNull(recordList.getMetadata().get("nextPageToken"));
     }
     
     @Test
@@ -312,6 +258,114 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
             JSONObject json = (JSONObject)o;
             assertTrue(json.get("username").toString().matches(".*?user@kineticdata.*?"));
         }
+    }
+    
+    @Test
+    public void test_form_queryBySlug() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kappSlug=services&slug=bomboo-provisioning-process");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList recordList = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_retrieve_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms/cleaning");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_form_limit() throws Exception {
+        
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms?limit=1");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+   
+    @Test
+    public void test_form_query() throws Exception {
+        
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms?limit=100&q=name=*%22c%22 AND status=%22Active%22");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_form_query_include() throws Exception {
+        
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms?include=fields");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_form_no_query() throws Exception {
+        
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
     }
     
     /*---------------------------------------------------------------------------------------------

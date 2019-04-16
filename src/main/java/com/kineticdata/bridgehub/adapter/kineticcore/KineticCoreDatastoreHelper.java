@@ -34,13 +34,13 @@ import org.json.simple.JSONValue;
 /**
  *
  */
-public class KineticCoreDatastoreFormHelper {
+public class KineticCoreDatastoreHelper {
     private final String username;
     private final String password;
     private final String spaceUrl;
     private final Pattern attributePattern;
 
-    public KineticCoreDatastoreFormHelper(String username, String password, String spaceUrl) {
+    public KineticCoreDatastoreHelper(String username, String password, String spaceUrl) {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
@@ -70,7 +70,7 @@ public class KineticCoreDatastoreFormHelper {
             "query '%s'. Query must be include slug={datastore slug} to retrieve a single datastore.",request.getQuery()));
 
         JSONObject datastore;
-        String url = String.format("%s/app/api/v1/datastore/forms/%s?include=details,attributes",this.spaceUrl,slug);
+        String url = String.format("%s/app/api/v1/datastores/%s?include=details,attributes",this.spaceUrl,slug);
 
         HttpClient client = HttpClients.createDefault();
         HttpResponse response;
@@ -90,11 +90,11 @@ public class KineticCoreDatastoreFormHelper {
         }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
         }
 
         JSONObject json = (JSONObject)JSONValue.parse(output);
-        datastore = (JSONObject)json.get("form");
+        datastore = (JSONObject)json.get("datastore");
 
         return createRecordFromDatastore(request.getFields(), datastore);
     }
@@ -209,7 +209,7 @@ public class KineticCoreDatastoreFormHelper {
             if (!Collections.disjoint(DETAIL_FIELDS, request.getFields())) includes.add("details");
         }
 
-        String url = this.spaceUrl+"/app/api/v1/datastore/forms";
+        String url = this.spaceUrl+"/app/api/v1/datastores";
         if (!includes.isEmpty()) url += "?include="+StringUtils.join(includes,",");
         HttpGet get = new HttpGet(url);
         get = addAuthenticationHeader(get, this.username, this.password);
@@ -224,7 +224,7 @@ public class KineticCoreDatastoreFormHelper {
         }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
         }
 
         logger.trace("Starting to parse the JSON Response");
@@ -234,7 +234,7 @@ public class KineticCoreDatastoreFormHelper {
             throw new BridgeError("Bridge Error: " + json.toJSONString());
         }
 
-        JSONArray datastores = (JSONArray)json.get("forms");
+        JSONArray datastores = (JSONArray)json.get("datastores");
         String query = request.getQuery();
         if (!query.isEmpty()) {
             datastores = filterDatastores(datastores, request.getQuery());

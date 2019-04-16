@@ -8,10 +8,11 @@ import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
 import static com.kineticdata.bridgehub.adapter.kineticcore.KineticCoreAdapter.logger;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,49 +40,36 @@ public class KineticCoreSubmissionHelper {
     private final String username;
     private final String password;
     private final String spaceUrl;
-    private final KineticCoreQualificationParser qualificationParser;
+    private final Pattern fieldPattern;
 
     public KineticCoreSubmissionHelper(String username, String password, String spaceUrl) {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
-        this.qualificationParser = new KineticCoreQualificationParser();
+        this.fieldPattern = Pattern.compile("(\\S+)\\[(.*?)\\]");
     }
 
     public Count count(BridgeRequest request) throws BridgeError {
-        // Initialize the count variable
-        Integer count = 0;
-        
-        // Parse the query
-        Map<String,String> parsedQuery = this.qualificationParser.parseSubmissionQuery(request);
-        Map<String,String> metadata = new HashMap<String,String>();
-        metadata.put("limit","1000");
-        
-        JSONObject response = requestSubmissions(parsedQuery,metadata);
-        count += ((JSONArray)response.get("submissions")).size();
-        while (response.get("nextPageToken") != null) {
-            metadata.put("pageToken",response.get("nextPageToken").toString());
-            response = requestSubmissions(parsedQuery,metadata);
-            count += ((JSONArray)response.get("submissions")).size();
-        }
+       Integer count = countSubmissions(request,null);
 
         return new Count(count);
     }
 
     public Record retrieve(BridgeRequest request) throws BridgeError {
         String submissionId = null;
-        Pattern p = Pattern.compile("id=([^&]+)",Pattern.CASE_INSENSITIVE);
-        Matcher m = p.matcher(request.getQuery());
-        if (m.matches()) {
-            submissionId = m.group(1);
+        if (request.getQuery().matches("[Ii][Dd]=.*?(?:$|&)")) {
+            Pattern p = Pattern.compile("[Ii][Dd]=(.*?)(?:$|&)");
+            Matcher m = p.matcher(request.getQuery());
+
+            if (m.find()) {
+                submissionId = m.group(1);
+            }
         }
 
         String url;
         JSONObject submission;
         if (submissionId == null) {
-            // Parse the query
-            Map<String,String> parsedQuery = this.qualificationParser.parseSubmissionQuery(request);
-            JSONObject response = requestSubmissions(parsedQuery);
+            JSONObject response = searchSubmissions(request);
             JSONArray submissions = (JSONArray)response.get("submissions");
 
             if (submissions.size() > 1) {
@@ -123,32 +111,18 @@ public class KineticCoreSubmissionHelper {
     }
 
     public RecordList search(BridgeRequest request) throws BridgeError {
-        Map<String,String> metadata = new HashMap<String,String>();
-        
-        // Default the limit to 1000 unless limit
-        if (request.getMetadata() == null || !request.getMetadata().containsKey("limit")) {
-            Map<String,String> inputMeta = request.getMetadata() == null ? new HashMap<String,String>() : request.getMetadata();
-            inputMeta.put("limit", "1000");
-            request.setMetadata(inputMeta);
-        }
-
-        // Parse the query
-        Map<String,String> parsedQuery = this.qualificationParser.parseSubmissionQuery(request);
-        JSONObject response = requestSubmissions(parsedQuery,request.getMetadata());
+        // Initialize the metadata variable that will be returned
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
+        JSONObject response = searchSubmissions(request);
         JSONArray submissions = (JSONArray)response.get("submissions");
 
-        List<String> fields = new ArrayList<String>(request.getFields());
-        if (parsedQuery.containsKey("parent") || parsedQuery.containsKey("ancestor")) {
-            fields.add("kappSlug");
-            fields.add("formSlug");
-        }
-        List<Record> records = createRecordsFromSubmissions(fields, submissions);
+        List<Record> records = createRecordsFromSubmissions(request.getFields(), submissions);
 
         // Sort the records if they are all returned in a second page
         if (request.getMetadata("order") == null && response.get("nextPageToken") == null) {
             // name,type,desc assumes name ASC,type ASC,desc ASC
             Map<String,String> defaultOrder = new LinkedHashMap<String,String>();
-            for (String field : fields) {
+            for (String field : request.getFields()) {
                 defaultOrder.put(field, "ASC");
             }
             records = sortRecords(defaultOrder, records);
@@ -157,10 +131,10 @@ public class KineticCoreSubmissionHelper {
           Map<String,String> orderParse = BridgeUtils.parseOrder(request.getMetadata("order"));
           // Check for any fields in the order metadata that aren't included in the field list
           for (String field : orderParse.keySet()) {
-              if (!fields.contains(field)) {
+              if (!request.getFields().contains(field)) {
                   // If any fields are hit that are in the sort metadata and not the field list,
                   // rebuild the record list while including the sort fields in the included fields
-                  Set<String> allFields = new HashSet<String>(fields);
+                  Set<String> allFields = new HashSet<String>(request.getFields());
                   allFields.addAll(orderParse.keySet());
                   records = createRecordsFromSubmissions(new ArrayList<String>(allFields),submissions);
                   break;
@@ -178,138 +152,17 @@ public class KineticCoreSubmissionHelper {
         // Return the response
         return new RecordList(request.getFields(), records, metadata);
     }
-    
-    /*---------------------------------------------------------------------------------------------
-     * QUERY HELPER METHODS
-     *-------------------------------------------------------------------------------------------*/
-    
-    private JSONObject requestSubmissions(Map<String,String> query) throws BridgeError {
-        return requestSubmissions(query,null);
-    }
-
-    private JSONObject requestSubmissions(Map<String,String> query, Map<String,String> metadata) throws BridgeError {
-        // Build the URL
-        String url;
-        if (query.containsKey("parent") || query.containsKey("ancestor")) {
-            url = query.containsKey("parent") 
-                ? String.format("%s/app/api/v1/submissions/%s?include=children.details,children.values,children.form,children.form.kapp",this.spaceUrl,query.get("parent"))
-                : String.format("%s/app/api/v1/submissions/%s?include=descendants.details,descendants.values,descendants.form,descendants.form.kapp",this.spaceUrl,query.get("ancestor"));
-        } else {
-            url = query.containsKey("formSlug")
-                ? String.format("%s/app/api/v1/kapps/%s/forms/%s/submissions?include=details,values",this.spaceUrl,query.get("kappSlug"),query.get("formSlug"))
-                : String.format("%s/app/api/v1/kapps/%s/submissions?include=details,values",this.spaceUrl,query.get("kappSlug"));
-            if (!query.get("encodedQuery").isEmpty()) url += "&"+query.get("encodedQuery");
-        }
-        
-        if (metadata != null) {
-            for (Map.Entry<String,String> param : metadata.entrySet()) {
-                if (!param.getKey().equals("order")) url = url+"&"+param.getKey()+"="+param.getValue();
-            }
-        }
-
-        // Initializing the Http Objects
-        HttpClient client = HttpClients.createDefault();
-        HttpResponse response;
-        HttpGet get = new HttpGet(url);
-        get = addAuthenticationHeader(get, this.username, this.password);
-
-        String output = "";
-        try {
-            response = client.execute(get);
-
-            HttpEntity entity = response.getEntity();
-            output = EntityUtils.toString(entity);
-            logger.trace("Request response code: " + response.getStatusLine().getStatusCode());
-        }
-        catch (IOException e) {
-            logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to the Kinetic Core server.",e);
-        }
-
-        logger.trace("Starting to parse the JSON Response");
-        JSONObject json = (JSONObject)JSONValue.parse(output);
-
-        if (response.getStatusLine().getStatusCode() == 404) {
-            throw new BridgeError("Resource Not Found: " + json.get("error").toString());
-        } else if (response.getStatusLine().getStatusCode() != 200) {
-            String errorMessage = json.containsKey("error") ? json.get("error").toString() : json.toJSONString();
-            throw new BridgeError("Bridge Error: " + errorMessage);
-        }
-
-        // Check if any messages were returned with the response (and log them if there were any)
-        JSONArray messages = (JSONArray)json.get("messages");
-        if (messages != null && !messages.isEmpty()) {
-            logger.trace("Message from the Submissions API for the follwing query: "+query+"\n"+StringUtils.join(messages,"; "));
-        }
-
-        // Parse the results
-        JSONObject results;
-        if (query.containsKey("parent") || query.containsKey("ancestor")) {
-            JSONObject submission = (JSONObject)json.get("submission");
-            JSONArray children = (JSONArray)(query.containsKey("parent") ? submission.get("children") : submission.get("descendants"));
-            // Add kappSlug and formSlug to each submission object
-            if (query.containsKey("kappSlug") || query.containsKey("formSlug")) {
-                for (int i=0; i<children.size(); i++) {
-                    JSONObject child = (JSONObject)children.get(i);
-                    JSONObject form = (JSONObject)child.get("form");
-                    if (query.containsKey("kappSlug")) {
-                        String kappSlug = form != null && form.containsKey("kapp") ? (String)((JSONObject)form.get("kapp")).get("slug") : null;
-                        child.put("kappSlug",kappSlug);
-                    }
-                    if (query.containsKey("formSlug")) {
-                        String formSlug = form != null ? (String)form.get("slug") : null;
-                        child.put("formSlug",formSlug);
-                    }
-                    // Replace the previous child object with the child object containing the kappSlug/formSlug
-                    children.remove(i);
-                    children.add(i,child);
-                }
-                // Add the kappSlug and formSlug to the main query if they were included originally
-                if (query.containsKey("kappSlug")) query.put("query",query.get("query")+"kappSlug="+query.get("kappSlug")+"&");
-                if (query.containsKey("formSlug")) query.put("query",query.get("query")+"formSlug="+query.get("formSlug")+"&");
-            }
-
-            // Create a sample JSONObject submissions return object that matches the normal return
-            // from the submissions object
-            results = new JSONObject();
-            results.put("nextPageToken",null);
-            results.put("submissions",FilterUtils.filterSubmissions(children,query.get("query")));
-        } else {
-            results = json;
-        }
-        return results;
-    }
 
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
-    
+
     private HttpGet addAuthenticationHeader(HttpGet get, String username, String password) {
         String creds = username + ":" + password;
         byte[] basicAuthBytes = Base64.encodeBase64(creds.getBytes());
         get.setHeader("Authorization", "Basic " + new String(basicAuthBytes));
 
         return get;
-    }
-    
-    /**
-     * Returns the string value of the object.
-     * <p>
-     * If the value is not a String, a JSON representation of the object will be returned.
-     *
-     * @param value
-     * @return
-     */
-    private static String toString(Object value) {
-        String result = null;
-        if (value != null) {
-            if (String.class.isInstance(value)) {
-                result = (String)value;
-            } else {
-                result = JSONValue.toJSONString(value);
-            }
-        }
-        return result;
     }
 
     // A helper method used to call createRecordsFromSubmissions but with a
@@ -327,6 +180,22 @@ public class KineticCoreSubmissionHelper {
     }
 
     private List<Record> createRecordsFromSubmissions(List<String> fields, JSONArray submissions) throws BridgeError {
+        // Create 'searchable' field list. If there needs to be a multi-level
+        // search (aka, values[Group]) the field's type will be List<String>
+        // instead of just String
+        List searchableFields = new ArrayList();
+        for (String field : fields) {
+            Matcher matcher = fieldPattern.matcher(field);
+            if (matcher.find()) {
+                List<String> multiLevelField = new ArrayList<String>();
+                multiLevelField.add(matcher.group(1));
+                multiLevelField.add(matcher.group(2));
+                searchableFields.add(multiLevelField);
+            } else {
+                searchableFields.add(field);
+            }
+        }
+
         // Go through the submissions in the JSONArray to create a list of records
         List<Record> records = new ArrayList<Record>();
         for (Object o : submissions) {
@@ -337,6 +206,167 @@ public class KineticCoreSubmissionHelper {
         records = BridgeUtils.getNestedFields(fields,records);
 
         return records;
+    }
+
+    private Integer countSubmissions(BridgeRequest request, String pageToken) throws BridgeError {
+        Integer count = 0;
+        String[] indvQueryParts = request.getQuery().split("&");
+
+        // Retrieving the slugs for the kapp and form slug that were passed in the query
+        String kappSlug = null;
+        String formSlug = null;
+        List<String> queryPartsList = new ArrayList<String>();
+        for (String indvQueryPart : indvQueryParts) {
+            String[] str_array = indvQueryPart.split("=");
+            String field = str_array[0].trim();
+            String value = "";
+            if (str_array.length > 1) value = str_array[1].trim();
+            if (field.equals("formSlug")) { formSlug = value; }
+            else if (field.equals("kappSlug")) { kappSlug = value; }
+            else if (!field.equals("limit")) { // ignore the limit, because count always uses the default limit
+                queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value));
+            }
+        }
+        queryPartsList.add("limit=1000");
+        String query = StringUtils.join(queryPartsList,"&");
+
+        if (kappSlug == null) {
+            throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
+        }
+
+
+        // Make sure that the pageToken isn't null for the first pass.
+        String nextToken = pageToken != null ? pageToken : "";
+        while (nextToken != null) {
+            // the token query is used to reset the query each time so that multiple pageTokens
+            // aren't added to the query after multiple passes
+            String tokenQuery = query;
+            // if nextToken is empty, don't add to query (only relevant on first pass)
+            if (!nextToken.isEmpty()) {
+                tokenQuery = tokenQuery+"&pageToken="+nextToken;
+            }
+            JSONObject json = searchSubmissions(kappSlug, formSlug, tokenQuery);
+            nextToken = (String)json.get("nextPageToken");
+            JSONArray submissions = (JSONArray)json.get("submissions");
+            count += submissions.size();
+        }
+
+        return count;
+    }
+
+        /**
+       * Returns the string value of the object.
+       * <p>
+       * If the value is not a String, a JSON representation of the object will be returned.
+       *
+       * @param value
+       * @return
+       */
+    private static String toString(Object value) {
+        String result = null;
+        if (value != null) {
+            if (String.class.isInstance(value)) {
+                result = (String)value;
+            } else {
+                result = JSONValue.toJSONString(value);
+            }
+        }
+        return result;
+     }
+
+    private JSONObject searchSubmissions(BridgeRequest request) throws BridgeError {
+        String[] indvQueryParts = request.getQuery().split("&(?=[^&]*?=)");
+
+        // Retrieving the slugs for the kapp and form slug that were passed in the query
+        String kappSlug = null;
+        String formSlug = null;
+        String limit = null;
+        List<String> queryPartsList = new ArrayList<String>();
+        for (String indvQueryPart : indvQueryParts) {
+            String[] str_array = indvQueryPart.split("=");
+            String field = str_array[0].trim();
+            String value = "";
+            if (str_array.length > 1) value = StringUtils.join(Arrays.copyOfRange(str_array, 1, str_array.length),"=");
+            if (field.equals("formSlug")) { formSlug = value; }
+            else if (field.equals("kappSlug")) { kappSlug = value; }
+            else if (field.equals("limit")) { limit = value; }
+            else {
+                queryPartsList.add(URLEncoder.encode(field) + "=" + URLEncoder.encode(value.trim()));
+            }
+        }
+        // Add the include statement to get extra values and details
+        queryPartsList.add("include=values,details");
+
+        // Add a limit to the query by either using the value that was passed, or defaulting limit=200
+        String pageSize = request.getMetadata("pageSize");
+        if (pageSize != null) {
+            queryPartsList.add("limit="+pageSize);
+        } else if (limit != null && !limit.isEmpty()) {
+            queryPartsList.add("limit="+limit);
+        } else {
+            queryPartsList.add("limit=1000");
+        }
+
+        // If metadata[nextPageToken] is included in the request, add it to the query
+        if (request.getMetadata("pageToken") != null) {
+            queryPartsList.add("pageToken="+request.getMetadata("pageToken"));
+        }
+
+        // Join the query list into a query string
+        String query = StringUtils.join(queryPartsList,"&");
+
+        if (kappSlug == null) {
+            throw new BridgeError("Invalid Request: The bridge query needs to include a kappSlug.");
+        }
+
+        return searchSubmissions(kappSlug, formSlug, query);
+    }
+
+    private JSONObject searchSubmissions(String kapp, String form, String query) throws BridgeError {
+        // Initializing the Http Objects
+        HttpClient client = HttpClients.createDefault();
+        HttpResponse response;
+
+        // Build the submissions api url. Url is different based on whether the form slug has been included.
+        String url;
+        if (form != null) {
+            url = String.format("%s/app/api/v1/kapps/%s/forms/%s/submissions?%s",this.spaceUrl,kapp,form,query);
+        } else {
+            url = String.format("%s/app/api/v1/kapps/%s/submissions?%s",this.spaceUrl,kapp,query);
+        }
+        HttpGet get = new HttpGet(url);
+        get = addAuthenticationHeader(get, this.username, this.password);
+
+        String output = "";
+        try {
+            response = client.execute(get);
+
+            HttpEntity entity = response.getEntity();
+            output = EntityUtils.toString(entity);
+            logger.trace("Request response code: " + response.getStatusLine().getStatusCode());
+        }
+        catch (IOException e) {
+            logger.error(e.getMessage());
+            throw new BridgeError("Unable to make a connection to the Kinetic Core server.");
+        }
+
+        logger.trace("Starting to parse the JSON Response");
+        JSONObject json = (JSONObject)JSONValue.parse(output);
+
+        if (response.getStatusLine().getStatusCode() == 404) {
+            throw new BridgeError("Invalid kappSlug or formSlug: " + json.get("error").toString());
+        } else if (response.getStatusLine().getStatusCode() != 200) {
+            String errorMessage = json.containsKey("error") ? json.get("error").toString() : json.toJSONString();
+            throw new BridgeError("Bridge Error: " + errorMessage);
+        }
+
+        JSONArray messages = (JSONArray)json.get("messages");
+
+        if (!messages.isEmpty()) {
+            logger.trace("Message from the Submissions API for the follwing query: "+query+"\n"+StringUtils.join(messages,"; "));
+        }
+
+        return json;
     }
 
     protected List<Record> sortRecords(final Map<String,String> fieldParser, List<Record> records) throws BridgeError {

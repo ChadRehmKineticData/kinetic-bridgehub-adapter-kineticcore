@@ -10,8 +10,12 @@ import com.kineticdata.commons.v1.config.ConfigurableProperty;
 import com.kineticdata.commons.v1.config.ConfigurablePropertyMap;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -58,13 +62,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
     private String username;
     private String password;
     private String spaceUrl;
-    private KineticCoreSubmissionHelper submissionHelper;
-    private KineticCoreUserHelper userHelper;
-    private KineticCoreTeamHelper teamHelper;
-    private KineticCoreKappHelper kappHelper;
-    private KineticCoreFormHelper formHelper;
-    private KineticCoreDatastoreFormHelper datastoreFormHelper;
-    private KineticCoreDatastoreSubmissionHelper datastoreSubmissionHelper;
+    private KineticCoreApiHelper coreApiHelper;
 
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
             new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
@@ -72,12 +70,6 @@ public class KineticCoreAdapter implements BridgeAdapter {
             new ConfigurableProperty(Properties.SPACE_URL).setIsRequired(true)
     );
 
-    /**
-     * Structures that are valid to use in the bridge
-     */
-    public static final List<String> VALID_STRUCTURES = Arrays.asList(new String[] {
-        "Submissions","Users","Teams","Kapps","Forms","Datastore Forms","Datastore Submissions"
-    });
 
     /*---------------------------------------------------------------------------------------------
      * SETUP METHODS
@@ -107,18 +99,42 @@ public class KineticCoreAdapter implements BridgeAdapter {
         this.spaceUrl = properties.getValue(Properties.SPACE_URL);
         this.username = properties.getValue(Properties.USERNAME);
         this.password = properties.getValue(Properties.PASSWORD);
-        this.submissionHelper = new KineticCoreSubmissionHelper(this.username, this.password, this.spaceUrl);
-        this.userHelper = new KineticCoreUserHelper(this.username, this.password, this.spaceUrl);
-        this.teamHelper = new KineticCoreTeamHelper(this.username, this.password, this.spaceUrl);
-        this.kappHelper = new KineticCoreKappHelper(this.username, this.password, this.spaceUrl);
-        this.formHelper = new KineticCoreFormHelper(this.username, this.password, this.spaceUrl);
-        this.datastoreFormHelper = new KineticCoreDatastoreFormHelper(this.username, this.password, this.spaceUrl);
-        this.datastoreSubmissionHelper = new KineticCoreDatastoreSubmissionHelper(this.username, this.password, this.spaceUrl);
+        this.coreApiHelper = new KineticCoreApiHelper(this.username, this.password, this.spaceUrl);
 
         // Testing the configuration values to make sure that they
         // correctly authenticate with Core
         testAuth();
     }
+    
+    public static class Mapping {
+        private final String plural;
+        private final String singular;
+        private final Set<String> implicitIncludes;
+
+        public Mapping(String plural, String singular, Collection<String> implicitIncludes) {
+            this.plural = plural;
+            this.singular = singular;
+            this.implicitIncludes = new LinkedHashSet<>(implicitIncludes);
+        }
+
+        public String getPlural() {
+            return plural;
+        }
+
+        public String getSingular() {
+            return singular;
+        }
+
+        public Set<String> getImplicitIncludes() {
+            return implicitIncludes;
+        }
+        
+    }
+    
+    public static Map<String,Mapping> MAPPINGS = new LinkedHashMap<String,Mapping>() {{
+        put("Submissions", new Mapping("submissions", "submission", Arrays.asList("form", "form.details")));
+        put("Forms", new Mapping("forms", "form", Arrays.asList("details", "attributes")));
+    }};
 
     /*---------------------------------------------------------------------------------------------
      * IMPLEMENTATION METHODS
@@ -127,30 +143,16 @@ public class KineticCoreAdapter implements BridgeAdapter {
     @Override
     public Count count(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
-
-        if (!VALID_STRUCTURES.contains(request.getStructure())) {
-            throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
+        
+        Mapping mapping = MAPPINGS.get(request.getStructure());
+        if (mapping == null) {
+            throw new BridgeError("Invalid Structure: '" 
+                + request.getStructure() + "' is not a valid structure");
         }
-
-        Count count;
-        if (request.getStructure().equals("Submissions")) {
-            count = this.submissionHelper.count(request);
-        } else if (request.getStructure().equals("Users")) {
-            count = this.userHelper.count(request);
-        } else if (request.getStructure().equals("Teams")) {
-            count = this.teamHelper.count(request);
-        } else if (request.getStructure().equals("Kapps")) {
-            count = this.kappHelper.count(request);
-        } else if (request.getStructure().equals("Forms")) {
-            count = this.formHelper.count(request);
-        } else if (request.getStructure().equals("Datastore Forms")) {
-            count = this.datastoreFormHelper.count(request);
-        } else if (request.getStructure().equals("Datastore Submissions")) {
-            count = this.datastoreSubmissionHelper.count(request);
-        } else {
-            throw new BridgeError("The structure '"+request.getStructure()+"' does not have a count method defined");
-        }
-
+        
+        Count count = null;
+        count = this.coreApiHelper.count(request, mapping);
+        
         return count;
     }
 
@@ -158,32 +160,14 @@ public class KineticCoreAdapter implements BridgeAdapter {
     public Record retrieve(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
 
-        if (!VALID_STRUCTURES.contains(request.getStructure())) {
-            throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
-        }
-
-        if (request.getFields() == null || request.getFields().isEmpty()) {
-            throw new BridgeError("Invalid Request: No fields were included in the request.");
+        Mapping mapping = MAPPINGS.get(request.getStructure());
+        if (mapping == null) {
+            throw new BridgeError("Invalid Structure: '" 
+                + request.getStructure() + "' is not a valid structure");
         }
 
         Record record;
-        if (request.getStructure().equals("Submissions")) {
-            record = this.submissionHelper.retrieve(request);
-        } else if (request.getStructure().equals("Users")) {
-            record = this.userHelper.retrieve(request);
-        } else if (request.getStructure().equals("Teams")) {
-            record = this.teamHelper.retrieve(request);
-        } else if (request.getStructure().equals("Kapps")) {
-            record = this.kappHelper.retrieve(request);
-        } else if (request.getStructure().equals("Forms")) {
-            record = this.formHelper.retrieve(request);
-        } else if (request.getStructure().equals("Datastore Forms")) {
-            record = this.datastoreFormHelper.retrieve(request);
-        } else if (request.getStructure().equals("Datastore Submissions")) {
-            record = this.datastoreSubmissionHelper.retrieve(request);
-        } else {
-            throw new BridgeError("The structure '"+request.getStructure()+"' does not have a retrieve method defined");
-        }
+        record = this.coreApiHelper.retrieve(request, mapping);
 
         return record;
     }
@@ -192,32 +176,14 @@ public class KineticCoreAdapter implements BridgeAdapter {
     public RecordList search(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
 
-        if (!VALID_STRUCTURES.contains(request.getStructure())) {
-            throw new BridgeError("Invalid Structure: '" + request.getStructure() + "' is not a valid structure");
-        }
-
-         if (request.getFields() == null || request.getFields().isEmpty()) {
-            throw new BridgeError("Invalid Request: No fields were included in the request.");
+        Mapping mapping = MAPPINGS.get(request.getStructure());
+        if (mapping == null) {
+            throw new BridgeError("Invalid Structure: '" 
+                + request.getStructure() + "' is not a valid structure");
         }
 
         RecordList recordList;
-        if (request.getStructure().equals("Submissions")) {
-            recordList = this.submissionHelper.search(request);
-        } else if (request.getStructure().equals("Users")) {
-            recordList = this.userHelper.search(request);
-        } else if (request.getStructure().equals("Teams")) {
-            recordList = this.teamHelper.search(request);
-        } else if (request.getStructure().equals("Kapps")) {
-            recordList = this.kappHelper.search(request);
-        } else if (request.getStructure().equals("Forms")) {
-            recordList = this.formHelper.search(request);
-        } else if (request.getStructure().equals("Datastore Forms")) {
-            recordList = this.datastoreFormHelper.search(request);
-        } else if (request.getStructure().equals("Datastore Submissions")) {
-            recordList = this.datastoreSubmissionHelper.search(request);
-        } else {
-            throw new BridgeError("The structure '"+request.getStructure()+"' does not have a search method defined");
-        }
+        recordList = this.coreApiHelper.search(request, mapping);
 
         return recordList;
     }

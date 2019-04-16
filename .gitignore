@@ -4,3 +4,4 @@ nb-configuration.xml
 .project
 .settings/
 .vscode
+src/main/java/com/kineticdata/bridgehub/adapter/kineticcore/TODO.md
