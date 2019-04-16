@@ -368,6 +368,45 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         String x = "1";
     }
     
+    @Test
+    public void test_retrieve_datastore_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Datastore Forms");
+        request.setQuery("kapps/services/forms/cleaning");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_datastore_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Datastore Forms");
+        request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_datastore_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Datastore Forms");
+        request.setQuery("kapps/services/forms");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
+    
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
