@@ -144,19 +144,25 @@ public class KineticCoreApiHelper {
 
     // A helper method used to call createRecordsFromForms but with a
     // single record instead of an array
-    private Record createRecord(List<String> fields, JSONObject form) 
+    private Record createRecord(List<String> fields, JSONObject object) 
         throws BridgeError {
         
-        JSONArray jsonArray = new JSONArray();
-        jsonArray.add(form);
-        return createRecords(fields,jsonArray).get(0);
+        Record record;
+        if (object != null) {
+            JSONArray jsonArray = new JSONArray();
+            jsonArray.add(object);
+            record =  createRecords(fields,jsonArray).get(0);   
+        } else {
+            record = new Record();
+        }
+        return record;
     }
-
+    
     // Made protected and final for the purposes of testing
     protected final List<Record> createRecords(List<String> fields, 
         JSONArray objects) throws BridgeError {
         
-// Go through the users in the JSONArray to create a list of records
+        // Go through the users in the JSONArray to create a list of records
         List<Record> records = new ArrayList<Record>();
         for (Object o : objects) {
             JSONObject object = (JSONObject)o;
@@ -180,7 +186,7 @@ public class KineticCoreApiHelper {
         throws BridgeError {
         
         if (!object.containsKey(type)) throw new BridgeError(
-            String.format("The field '%s' cannot be found on the Form object",
+            String.format("The field '%s' cannot be found on the object",
             type));
         
         JSONArray attributes = (JSONArray)object.get(type);
@@ -228,7 +234,7 @@ public class KineticCoreApiHelper {
             HttpEntity entity = response.getEntity();
             if (response.getStatusLine().getStatusCode() == 404) {
                 throw new BridgeError(String.format(
-                    "Not Found: Form not found at %s.",
+                    "Not Found: %s not found at %s.", request.getStructure(),
                     String.join(",", parser.parsePath(queryString))));
             }
             output = EntityUtils.toString(entity);
@@ -265,6 +271,10 @@ public class KineticCoreApiHelper {
         if (!processedParameters.containsKey("include")) {
             processedParameters.put("include", new BasicNameValuePair("include",
                 implicitIncludes.stream().collect(Collectors.joining(","))));
+        }
+        if (!processedParameters.containsKey("limit")) {
+            processedParameters.put("limit", new BasicNameValuePair("limit",
+                "1000"));
         }
         
         return URLEncodedUtils.format(processedParameters.values(),

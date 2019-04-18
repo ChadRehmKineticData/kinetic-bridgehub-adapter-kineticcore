@@ -372,7 +372,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_retrieve_datastore_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Datastore Forms");
-        request.setQuery("kapps/services/forms/cleaning");
+        request.setQuery("datastore/forms/alerts");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
@@ -385,7 +385,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_search_datastore_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Datastore Forms");
-        request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22");
+        request.setQuery("datastore/forms?q=name=*%22a%22 AND status=%22Active%22");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
@@ -398,7 +398,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_count_datastore_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Datastore Forms");
-        request.setQuery("kapps/services/forms");
+        request.setQuery("datastore/forms");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
@@ -406,7 +406,124 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         Count count = getAdapter().count(request);
         String x = "1";
     }
+  
+    @Test
+    public void test_retrieve_users() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Users");
+        request.setQuery("users/chad.rehm%40kineticdata.com");
+        
+        List<String> list = Arrays.asList("displayName", "email");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
     
+    @Test
+    public void test_search_users() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Users");
+        request.setQuery("users?q=username=*%22c%22 AND enabled=%22true%22");
+        
+        List<String> list = Arrays.asList("displayName", "email");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_users() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Users");
+        request.setQuery("users");
+        
+        List<String> list = Arrays.asList("displayName", "email");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_retrieve_teams() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Teams");
+        request.setQuery("teams/c1ec1d62eafad32ca16fe4df49b9ca2f");
+        
+        List<String> list = Arrays.asList("name", "description");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_teams() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Teams");
+        request.setQuery("teams?q=name=*%22a%22");
+        
+        List<String> list = Arrays.asList("name", "description");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_teams() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Teams");
+        request.setQuery("teams");
+        
+        List<String> list = Arrays.asList("name", "description");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
+    
+    
+    @Test
+    public void test_retrieve_kapps() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Kapps");
+        request.setQuery("kapps/admin");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_kapps() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Kapps");
+        request.setQuery("kapps?q=name=*%22q%22");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_kapps() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Kapps");
+        request.setQuery("kapps");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/

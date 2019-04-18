@@ -65,9 +65,9 @@ public class KineticCoreAdapter implements BridgeAdapter {
     private KineticCoreApiHelper coreApiHelper;
 
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
-            new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
-            new ConfigurableProperty(Properties.PASSWORD).setIsRequired(true).setIsSensitive(true),
-            new ConfigurableProperty(Properties.SPACE_URL).setIsRequired(true)
+        new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
+        new ConfigurableProperty(Properties.PASSWORD).setIsRequired(true).setIsSensitive(true),
+        new ConfigurableProperty(Properties.SPACE_URL).setIsRequired(true)
     );
 
 
@@ -131,9 +131,23 @@ public class KineticCoreAdapter implements BridgeAdapter {
         
     }
     
-    public static Map<String,Mapping> MAPPINGS = new LinkedHashMap<String,Mapping>() {{
-        put("Submissions", new Mapping("submissions", "submission", Arrays.asList("form", "form.details")));
-        put("Forms", new Mapping("forms", "form", Arrays.asList("details", "attributes")));
+    public static Map<String,Mapping> MAPPINGS 
+        = new LinkedHashMap<String,Mapping>() {{
+        
+        put("Submissions", new Mapping("submissions", "submission",
+            Arrays.asList("values","details")));
+        put("Forms", new Mapping("forms", "form", 
+            Arrays.asList("details", "attributes")));
+        put("Users", new Mapping("users", "user",
+            Arrays.asList("attributes", "profileAttributes")));
+        put("Teams", new Mapping("teams", "team", 
+            Arrays.asList("attributes","memberships","details")));
+        put("Kapps", new Mapping("kapps", "kapp", 
+            Arrays.asList("details", "attributes")));
+        put("Datastore Forms", new Mapping("forms", "form", 
+            Arrays.asList("values","details")));
+        put("Datastore Submissions", new Mapping("submissions", "submission",
+            Arrays.asList("details", "attributes")));
     }};
 
     /*---------------------------------------------------------------------------------------------
