@@ -10,12 +10,15 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -36,8 +39,8 @@ import org.json.simple.JSONValue;
 public class KineticCoreApiHelper {
     private final String username;
     private final String password;
-    private final String spaceUrl;
-    private final Pattern attributePattern;
+    private final String spaceUrl;    
+    private static final Pattern NESTED_PATTERN = Pattern.compile("(.*?)\\[(.*?)\\]");
 
     public KineticCoreApiHelper (String username, String password,
         String spaceUrl) {
@@ -45,7 +48,6 @@ public class KineticCoreApiHelper {
         this.username = username;
         this.password = password;
         this.spaceUrl = spaceUrl;
-        this.attributePattern = Pattern.compile("(.*?)\\[(.*?)\\]");
     }
     
     public Count count(BridgeRequest request, 
@@ -54,9 +56,16 @@ public class KineticCoreApiHelper {
         String responce = executeRequest(request, mapping.getImplicitIncludes());
         JSONObject json = (JSONObject)JSONValue.parse(responce);
         JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+        
+        String nextPageToken = json.getOrDefault("nextPageToken", null)
+            .toString();
+        
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
+
+        metadata.put("pageToken",nextPageToken);
 
         // Create count object
-        return new Count(pluralResult.size());
+        return new Count(pluralResult.size(), metadata);
     }
     
     public Record retrieve(BridgeRequest request, 
@@ -84,33 +93,20 @@ public class KineticCoreApiHelper {
     
     public RecordList search(BridgeRequest request, 
         KineticCoreAdapter.Mapping mapping) throws BridgeError {
-        
+
         String responce = executeRequest(request, mapping.getImplicitIncludes());
         JSONObject json = (JSONObject)JSONValue.parse(responce);
         JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+        
+        List<Record> records = (pluralResult == null)
+            ? Collections.emptyList()
+            : createRecords(request.getFields(), pluralResult);
 
-        List<Record> records = createRecords(request.getFields(), pluralResult);
-
-        // Add pagination to the returned record list
-        int pageToken = request.getMetadata("pageToken") == null 
-            || request.getMetadata("pageToken").isEmpty() ? 0 
-            : Integer.parseInt(new String(Base64.decodeBase64(
-            request.getMetadata("pageToken"))));
-
-        int limit = request.getMetadata("limit") == null 
-            || request.getMetadata("limit").isEmpty() ? records.size() - pageToken 
-            : Integer.parseInt(request.getMetadata("limit"));
-
-        String nextPageToken = null;
-        if (pageToken + limit < records.size()) nextPageToken 
-            = Base64.encodeBase64String(
-            String.valueOf(pageToken + limit).getBytes());
-
-        records = records.subList(pageToken, pageToken + limit > records.size() 
-            ? records.size() : pageToken+limit);
-
+        String nextPageToken = json.getOrDefault("nextPageToken", null)
+            .toString();
+        
         Map<String,String> metadata = new LinkedHashMap<String,String>();
-        metadata.put("size",String.valueOf(limit));
+
         metadata.put("pageToken",nextPageToken);
 
         // Return the response
@@ -140,65 +136,74 @@ public class KineticCoreApiHelper {
             }
         }
         return result;
-     }
-
-    // A helper method used to call createRecordsFromForms but with a
-    // single record instead of an array
-    private Record createRecord(List<String> fields, JSONObject object) 
-        throws BridgeError {
-        
-        Record record;
-        if (object != null) {
-            JSONArray jsonArray = new JSONArray();
-            jsonArray.add(object);
-            record =  createRecords(fields,jsonArray).get(0);   
-        } else {
-            record = new Record();
-        }
-        return record;
     }
-    
-    // Made protected and final for the purposes of testing
-    protected final List<Record> createRecords(List<String> fields, 
-        JSONArray objects) throws BridgeError {
+
+    private Record createRecord(List<String> fields, JSONObject item) {
+        Map<String,Object> record = new LinkedHashMap<String,Object>();
         
-        // Go through the users in the JSONArray to create a list of records
-        List<Record> records = new ArrayList<Record>();
-        for (Object o : objects) {
-            JSONObject object = (JSONObject)o;
-            Map<String,Object> record = new LinkedHashMap<String,Object>();
-            for (String field : fields) {
-                Matcher m = this.attributePattern.matcher(field);
-                if (m.find()) {
-                    record.put(field,toString(getAttributeValues(m.group(1),
-                        m.group(2),object)));
+        fields.forEach(field -> {
+            Matcher matcher = NESTED_PATTERN.matcher(field);
+            
+            if (matcher.matches()) {
+                String collectionProperty = matcher.group(1);
+                String collectionKey = matcher.group(2);
+
+                Object collection = item.get(collectionProperty); // "attributes"
+                String value;
+                if (collection instanceof JSONArray) {
+                    value = extract((JSONArray)collection, collectionKey);
+                } else if (collection instanceof JSONObject) {
+                    value = extract((JSONObject)collection, collectionKey);
                 } else {
-                    record.put(field,toString(object.get(field)));
+                    throw new RuntimeException("Unexpected nested property type for \""+field+"\".");
                 }
+                record.put(field, value);
+            } else {
+                record.put(field, extract(item, field));
             }
-            records.add(new Record(record));
-        }
-
-        return records;
+        });
+        
+        return new Record(record);
     }
 
-    private List getAttributeValues(String type, String name, JSONObject object)
+    protected List<Record> createRecords(List<String> fields, JSONArray array) 
         throws BridgeError {
-        
-        if (!object.containsKey(type)) throw new BridgeError(
-            String.format("The field '%s' cannot be found on the object",
-            type));
-        
-        JSONArray attributes = (JSONArray)object.get(type);
-        for (Object attribute : attributes) {
-            HashMap attributeMap = (HashMap)attribute;
-            if (((String)attributeMap.get("name")).equals(name)) {
-                return (List)attributeMap.get("values");
-            }
-        }
-        return new ArrayList(); // Return an empty list if no values were found
+      // For each of the API result item
+       return (List<Record>) array.stream()
+        .map(item -> createRecord(fields, (JSONObject) item))
+        .collect(Collectors.toList());
     }
-        
+
+
+    private String extract(JSONArray object, String key) {
+        Object matchingItem = object.stream()
+            .filter(jsonObject -> jsonObject instanceof JSONObject)
+            .filter(jsonObject -> ((JSONObject)jsonObject).containsKey("name") 
+                && ((JSONObject)jsonObject).containsKey("values")
+            )
+            .filter(jsonObject -> 
+                key.equals(((JSONObject)jsonObject).get("name"))
+            )
+            .findFirst()
+            .orElse(null);
+        return extract((JSONObject)matchingItem, "values");
+    }
+
+    private String extract(JSONObject object, String field) {
+        Object value = (object == null) ? null : object.get(field);
+
+        String result;
+        if (value == null) {
+            result = null;
+        } else if (value instanceof JSONObject) {
+            result = ((JSONObject)value).toJSONString();
+        } else if (value instanceof JSONArray) {
+            result = ((JSONArray)value).toJSONString();
+        } else {
+            result = value.toString();
+        }
+        return result;
+    }
         
     public String executeRequest (BridgeRequest request, 
         Set<String> implicitIncludes) throws BridgeError{

@@ -279,7 +279,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setStructure("Forms");
         request.setQuery("kapps/services/forms/cleaning");
         
-        List<String> list = Arrays.asList("name", "slug");
+        List<String> list = Arrays.asList("name", "slug", "attributes[Icon]");
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
@@ -292,7 +292,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setStructure("Forms");
         request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22");
         
-        List<String> list = Arrays.asList("name", "slug");
+        List<String> list = Arrays.asList("name", "slug", "attributes[Icon]");
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
@@ -317,7 +317,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Forms");
-        request.setQuery("kapps/services/forms?limit=1");
+        request.setQuery("kapps/services/forms?limit=100");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
@@ -345,12 +345,12 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Forms");
-        request.setQuery("kapps/services/forms?include=fields");
+        request.setQuery("kapps/services/forms/cleaning?include=fields");
         
-        List<String> list = Arrays.asList("name", "slug");
+        List<String> list = Arrays.asList("name", "slug", "fields");
         request.setFields(list);
         
-        RecordList records = getAdapter().search(request);
+        Record record = getAdapter().retrieve(request);
         String x = "1";
     }
     
@@ -413,7 +413,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setStructure("Users");
         request.setQuery("users/chad.rehm%40kineticdata.com");
         
-        List<String> list = Arrays.asList("displayName", "email");
+        List<String> list = Arrays.asList("displayName", "email", "profileAttributes[First Name]");
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
@@ -424,7 +424,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_search_users() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Users");
-        request.setQuery("users?q=username=*%22c%22 AND enabled=%22true%22");
+        request.setQuery("users?limit=100&q=username=*%22c%22 AND enabled=%22true%22");
         
         List<String> list = Arrays.asList("displayName", "email");
         request.setFields(list);
@@ -465,7 +465,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setStructure("Teams");
         request.setQuery("teams?q=name=*%22a%22");
         
-        List<String> list = Arrays.asList("name", "description");
+        List<String> list = Arrays.asList("name", "description", "memberships", "attributes[Icon]");
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
@@ -484,15 +484,14 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         Count count = getAdapter().count(request);
         String x = "1";
     }
-    
-    
+        
     @Test
     public void test_retrieve_kapps() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Kapps");
         request.setQuery("kapps/admin");
         
-        List<String> list = Arrays.asList("name", "slug");
+        List<String> list = Arrays.asList("name", "slug", "attributes[Bundle Package]");
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
@@ -517,6 +516,58 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Kapps");
         request.setQuery("kapps");
+        
+        List<String> list = Arrays.asList("name", "slug");
+        request.setFields(list);
+        
+        Count count = getAdapter().count(request);
+        String x = "1";
+    }
+    
+        @Test
+    public void test_retrieve_submissions() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("submissions/5276a8fd-6509-11e9-b1c2-d5380975a038");
+        
+        List<String> list = Arrays.asList("createdBy", "label", "values[Checkbox Field]");
+        request.setFields(list);
+        
+        Record record = getAdapter().retrieve(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_submissions_by_form() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/forms/checkbox-field-bridge-test/submissions");
+        
+        List<String> list = Arrays.asList("createdBy", "label", "values[Checkbox Field]");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_search_submissions() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/submissions");
+        
+        List<String> list = Arrays.asList("createdBy", "label");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_count_submissions() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/submissions");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
