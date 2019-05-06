@@ -93,27 +93,47 @@ public class KineticCoreApiHelperTest {
         + "}"
     + "}]";
     
+    String users = "[{"
+        + "\"attributesMap\": {"
+            + "\"Organization\": ["
+                + "\"Architecture & Planning\""
+            + "]," 
+        + "},"
+        + "\"displayName\": \"Aaliyah Wisoky\","
+        + "\"email\": \"aaliyah.wisoky@rogahnlarkin.org\","
+        + "\"spaceAdmin\": false,"
+        + "\"timezone\": null,"
+        + "\"username\": \"aaliyah.wisoky@rogahnlarkin.org\""
+    + "}]";
+    
     @Test
     public void test_form() throws Exception {
 
         List<String> fields = new ArrayList();
         fields.add("name");
         fields.add("attributes[Icon]");
+        fields.add("attributes");
         
         KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
        
         Object obj = parser.parse(forms);
-        JSONArray formsArray = (JSONArray)obj;
+        JSONArray array = (JSONArray)obj;
         
         Map<String,Object> mockRecordMap = new LinkedHashMap<String,Object>();
         mockRecordMap.put("attributes[Icon]", "[\"fa-truck\"]");
         mockRecordMap.put("name", "Cleaning");
+        mockRecordMap.put("attributes", "[{"
+                + "\"name\":\"Icon\","
+                + "\"values\":[\"fa-truck\"]},"
+                + "{\"name\":\"Owning Team\","
+                + "\"values\":[\"Facilities\"]"
+            + "}]");
         Record mockRecord = new Record(mockRecordMap);
         
         List<Record> mockRecords = new ArrayList<Record>();
         mockRecords.add(mockRecord);
         
-        List<Record> records = helper.createRecords(fields, formsArray);
+        List<Record> records = helper.createRecords(fields, array);
         
 //        assertEquals(records, mockRecords);
     }
@@ -128,7 +148,7 @@ public class KineticCoreApiHelperTest {
         KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
        
         Object obj = parser.parse(submissions);
-        JSONArray formsArray = (JSONArray)obj;
+        JSONArray array = (JSONArray)obj;
         
         Map<String,Object> mockRecordMap = new LinkedHashMap<String,Object>();
         mockRecordMap.put("id", "3250911c-5afc-11e9-bf69-29dd7c482cf1");
@@ -138,7 +158,41 @@ public class KineticCoreApiHelperTest {
         List<Record> mockRecords = new ArrayList<Record>();
         mockRecords.add(mockRecord);
         
-        List<Record> records = helper.createRecords(fields, formsArray);
+        List<Record> records = helper.createRecords(fields, array);
+        int x = 1;
+    }
+
+    @Test
+    public void test_user() throws Exception {
+
+        List<String> fields = new ArrayList();
+        fields.add("displayName");
+        fields.add("attributesMap[Organization]");
+        fields.add("spaceAdmin");
+        fields.add("attributesMap");
+        fields.add("timezone");
+        
+        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+       
+        Object obj = parser.parse(users);
+        JSONArray array = (JSONArray)obj;
+        
+        Map<String,Object> mockRecordMap = new LinkedHashMap<String,Object>();
+        mockRecordMap.put("displayName", "Aaliyah Wisoky");
+        mockRecordMap.put("attributesMap[Organization]", "Architecture & Planning");
+        mockRecordMap.put("spaceAdmin", "false");
+        mockRecordMap.put("attributesMap", "{"
+                + "\"Organization\": ["
+                    + "\"Architecture & Planning\""
+                + "]," 
+            + "},");
+        mockRecordMap.put("timezone", "null");
+        Record mockRecord = new Record(mockRecordMap);
+        
+        List<Record> mockRecords = new ArrayList<Record>();
+        mockRecords.add(mockRecord);
+        
+        List<Record> records = helper.createRecords(fields, array);
         int x = 1;
     }
 }
