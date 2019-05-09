@@ -57,8 +57,8 @@ public class KineticCoreApiHelper {
         JSONObject json = (JSONObject)JSONValue.parse(responce);
         JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
         
-        String nextPageToken = json.getOrDefault("nextPageToken", null)
-            .toString();
+        String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+            null));
         
         Map<String,String> metadata = new LinkedHashMap<String,String>();
 
@@ -102,8 +102,8 @@ public class KineticCoreApiHelper {
             ? Collections.emptyList()
             : createRecords(request.getFields(), pluralResult);
 
-        String nextPageToken = json.getOrDefault("nextPageToken", null)
-            .toString();
+        String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+            null));
         
         Map<String,String> metadata = new LinkedHashMap<String,String>();
 

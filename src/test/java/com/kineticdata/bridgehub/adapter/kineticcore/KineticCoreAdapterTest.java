@@ -9,6 +9,7 @@ import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -116,163 +117,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         assertNotNull(error);
     }
-    
-    // Testing User Filtering. Currently testing the child methods to the search call that
-    // have been marked 'protected final' to be able to use consistent return data.
-    
-    @Test
-    public void test_users_queryAttributeField() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "attributes[First Name]=Jeff";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Assert that only 1 user matched the query
-        assertEquals(1,matchedUsers.size());
-        // Check to see if the username is jeff.johnson@gmail.com, the user who should 
-        // have the First Name attribute of Jeff
-        JSONObject object = (JSONObject)matchedUsers.get(0);
-        assertEquals("jeff.johnson@gmail.com",object.get("username").toString());
-    }
-    
-    @Test
-    public void test_users_queryProfileAttributeField() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "profileAttributes[Task Administrator]=false";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Assert that only 1 user matched the query
-        assertEquals(1,matchedUsers.size());
-        // Check to see if the username is jeff.johnson@gmail.com, the user who should 
-        // have the Task Administrator profile attribute of false
-        JSONObject object = (JSONObject)matchedUsers.get(0);
-        assertEquals("jeff.johnson@gmail.com",object.get("username").toString());
-    }
-    
-    @Test
-    public void test_users_queryStandardField() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "username=test.user";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Assert that only 1 user matched the query
-        assertEquals(1,matchedUsers.size());
-        // Check to see if the username is test.user
-        JSONObject object = (JSONObject)matchedUsers.get(0);
-        assertEquals("test.user",object.get("username").toString());
-    }
-    
-    @Test
-    public void test_users_queryLeadingWildcard() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "username=%@kineticdata.com";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Check to see if the usernames returned end in @kineticdata.com
-        for (Object o : matchedUsers) {
-            JSONObject json = (JSONObject)o;
-            assertTrue(json.get("username").toString().matches(".*?@kineticdata.com"));
-        }
-    }
-    
-    @Test
-    public void test_users_queryTrailingWildcard() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "username=test%";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Check to see if the usernames returned end in @kineticdata.com
-        for (Object o : matchedUsers) {
-            JSONObject json = (JSONObject)o;
-            assertTrue(json.get("username").toString().matches("test.*?"));
-        }
-    }
-    
-    @Test
-    public void test_users_queryLeadingAndTrailingWildcard() {
-        BridgeError error = null;
-        
-        // Create empty user helper (don't need username,password, or url because we are
-        // just using mock data instead of making calls to kinetic core
-        KineticCoreUserHelper helper = new KineticCoreUserHelper("","","");
-        String query = "username=%user@kineticdata%";
-        
-        JSONArray matchedUsers = null;
-        try {
-            matchedUsers = helper.filterUsers(buildUserRecordArray(),query);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNull(error);
-        
-        // Check to see if the usernames returned end in @kineticdata.com
-        for (Object o : matchedUsers) {
-            JSONObject json = (JSONObject)o;
-            assertTrue(json.get("username").toString().matches(".*?user@kineticdata.*?"));
-        }
-    }
-    
-    @Test
-    public void test_form_queryBySlug() throws Exception {
-        BridgeRequest request = new BridgeRequest();
-        request.setStructure("Forms");
-        request.setQuery("kappSlug=services&slug=bomboo-provisioning-process");
-        
-        List<String> list = Arrays.asList("name", "slug");
-        request.setFields(list);
-        
-        RecordList recordList = getAdapter().search(request);
-        String x = "1";
-    }
-    
+
     @Test
     public void test_retrieve_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
@@ -290,7 +135,11 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_search_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Forms");
-        request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22");
+        request.setQuery("kapps/services/forms?q=name=*%22c%22 AND status=%22<%=parameter[\"Status\"]%>%22");
+        
+        Map parameters = new HashMap();
+        parameters.put("Status", "Active");
+        request.setParameters(parameters);
         
         List<String> list = Arrays.asList("name", "slug", "attributes[Icon]");
         request.setFields(list);

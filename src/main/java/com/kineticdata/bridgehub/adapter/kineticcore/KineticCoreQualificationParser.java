@@ -4,6 +4,7 @@ import com.kineticdata.bridgehub.adapter.QualificationParser;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,12 @@ public class KineticCoreQualificationParser extends QualificationParser {
         return parts[0];
     }
     
+    @Override
     public String encodeParameter(String name, String value) {
-        return value;
+        String result = null;
+        if (value != null) {
+            result = value.replace("\\", "\\\\").replace("\"", "\\\"");
+        }
+        return result;
     }
 }

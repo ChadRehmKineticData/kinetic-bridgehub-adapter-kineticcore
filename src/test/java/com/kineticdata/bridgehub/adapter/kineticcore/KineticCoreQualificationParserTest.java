@@ -5,12 +5,16 @@
  */
 package com.kineticdata.bridgehub.adapter.kineticcore;
 
+import java.util.ArrayList;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import org.apache.http.NameValuePair;
+import org.apache.http.message.BasicNameValuePair;
 
 import static org.junit.Assert.assertEquals;
 
@@ -28,11 +32,43 @@ public class KineticCoreQualificationParserTest {
      *--------------------------------------------------------------------------------------------*/
 
     @Test
-    @Ignore("Write tests")
-    public void test_parse() throws Exception {
-
+    public void test_parsePath() throws Exception {
+        String path = parser.parsePath(
+            "kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22"
+        );
+        
+        assertEquals("kapps/services/forms",  path);
     }
 
+    @Test
+    public void test_parseQuery() throws Exception {
+        
+        List<NameValuePair> parameters = parser.parseQuery(
+            "kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22"
+        );
+        
+        // Build the parameter map
+        List<NameValuePair> list = new ArrayList<NameValuePair>();
+        list.add(new BasicNameValuePair("q", "name=*\"c\" AND status=\"Active\""));
+        
+        assertEquals(list,  parameters);
+    }
+    
+        @Test
+    public void test_parseQuery_multi_param() throws Exception {
+        
+        List<NameValuePair> parameters = parser.parseQuery(
+            "kapps/services/forms?limit=100&q=name=*%22c%22 AND status=%22Active%22&"
+        );
+        
+        // Build the parameter map
+        List<NameValuePair> list = new ArrayList<NameValuePair>();
+        list.add(new BasicNameValuePair("q", "name=*\"c\" AND status=\"Active\""));
+        list.add(new BasicNameValuePair("limit", "1000"));
+        
+        assertEquals(list,  parameters);
+    }
+    
     @Test
     public void test_parse_ParameterWithBackslash() throws Exception {
         // `\` should be escaped to `\\`
@@ -40,8 +76,23 @@ public class KineticCoreQualificationParserTest {
         // Build the parameter map
         Map<String, String> bridgeParameters = new LinkedHashMap<>();
         bridgeParameters.put("widget", "\\");
-        String queryString = safely(() -> parser.parse("q=<%=parameter[widget]%>", bridgeParameters));
+        String queryString = parser.parse("q=\"<%=parameter[widget]%>\"",
+            bridgeParameters);
+        
         assertEquals("q=\"" + "\\\\" + "\"", queryString);
+    }
+    
+    @Test
+    public void test_parse_ParameterWithBackslashAndQuotation() throws Exception {
+        // `\"` should be escaped to `\\\"`
+
+        // Build the parameter map
+        Map<String, String> bridgeParameters = new LinkedHashMap<>();
+        bridgeParameters.put("widget", "\\\"");
+        String queryString = parser.parse("q=\"<%=parameter[widget]%>\"",
+            bridgeParameters);
+        
+        assertEquals("q=\"" + "\\\\\\\"" + "\"", queryString);
     }
 
     @Test
@@ -50,29 +101,11 @@ public class KineticCoreQualificationParserTest {
 
         // Build the parameter map
         Map<String, String> bridgeParameters = new LinkedHashMap<>();
-        bridgeParameters.put("widget", "\"");
-        String queryString = safely(() -> parser.parse("q=<%=parameter[widget]%>", bridgeParameters));
-        assertEquals("q=\"" + "\\\"" + "\"", queryString);
+        bridgeParameters.put("widget", "\"abc");
+        String queryString = parser.parse("q=\"<%=parameter[widget]%>\"",
+            bridgeParameters);
+        
+        assertEquals("q=\"" + "\\\"abc" + "\"", queryString);
     }
 
-    /*----------------------------------------------------------------------------------------------
-     * HELPER METHODS
-     *--------------------------------------------------------------------------------------------*/
-
-    @FunctionalInterface
-    protected interface UnsafeSupplier<T> {
-        public T get() throws Exception;
-    }
-
-    protected static <T> T safely(UnsafeSupplier<T> supplier) {
-        T result;
-        try {
-            result = supplier.get();
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException(e.getClass().getName() + ": " + e.getMessage(), e);
-        }
-        return result;
-    }
 }
