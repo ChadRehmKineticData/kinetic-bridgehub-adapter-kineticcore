@@ -1,4 +1,4 @@
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
 import com.kineticdata.bridgehub.adapter.BridgeAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeError;
@@ -34,7 +34,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
      *--------------------------------------------------------------------------------------------*/
 
     /** Defines the adapter display name. */
-    public static final String NAME = "Kinetic Core Bridge";
+    public static final String NAME = "Kinetic Core v2 Bridge";
 
     /** Defines the logger */
     protected static final org.slf4j.Logger logger = LoggerFactory.getLogger(KineticCoreAdapter.class);

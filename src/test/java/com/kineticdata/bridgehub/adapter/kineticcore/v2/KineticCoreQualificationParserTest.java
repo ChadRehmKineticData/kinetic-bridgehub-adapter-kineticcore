@@ -3,8 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
+import com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreQualificationParser;
 import java.util.ArrayList;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -17,6 +18,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.message.BasicNameValuePair;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class KineticCoreQualificationParserTest {
 
@@ -64,9 +66,10 @@ public class KineticCoreQualificationParserTest {
         // Build the parameter map
         List<NameValuePair> list = new ArrayList<NameValuePair>();
         list.add(new BasicNameValuePair("q", "name=*\"c\" AND status=\"Active\""));
-        list.add(new BasicNameValuePair("limit", "1000"));
+        list.add(new BasicNameValuePair("limit", "100"));
         
-        assertEquals(list,  parameters);
+        assertTrue(list.size() == parameters.size() 
+            && list.containsAll(parameters) && parameters.containsAll(list));
     }
     
     @Test

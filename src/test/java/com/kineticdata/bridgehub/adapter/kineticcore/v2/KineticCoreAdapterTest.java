@@ -1,5 +1,6 @@
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
+import com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeAdapterTestBase;
 import com.kineticdata.bridgehub.adapter.BridgeError;
@@ -152,7 +153,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_count_form() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Forms");
-        request.setQuery("kapps/services/forms");
+        request.setQuery("kapps/services/forms?q=name=*%22zzzz%22");
         
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
@@ -171,7 +172,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         List<String> list = Arrays.asList("name", "slug");
         request.setFields(list);
         
-        Record record = getAdapter().retrieve(request);
+        RecordList records = getAdapter().search(request);
         String x = "1";
     }
    
@@ -273,12 +274,31 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_search_users() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Users");
-        request.setQuery("users?limit=100&q=username=*%22c%22 AND enabled=%22true%22");
+        request.setQuery("users?limit=10&q=username=*%22c%22 AND enabled=%22true%22");
         
         List<String> list = Arrays.asList("displayName", "email");
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
+    public void test_temp_search_users() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Users");
+        List<String> list = Arrays.asList("displayName", "email");
+        request.setFields(list);
+        
+        request.setQuery("users?limit=10&q=username=*%22c%22 AND enabled=%22true%22");
+        RecordList records1 = getAdapter().search(request);
+        
+        request.setQuery("users?limit=10&q=username=*%22c%22 AND enabled=%22true%22&pageToken=" + records1.getMetadata().get("pageToken"));
+        RecordList records2 = getAdapter().search(request);
+        
+        request.setQuery("users?limit=20&q=username=*%22c%22 AND enabled=%22true%22");
+        RecordList records3 = getAdapter().search(request);
+        
         String x = "1";
     }
     

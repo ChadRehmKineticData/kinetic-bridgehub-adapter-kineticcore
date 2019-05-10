@@ -1,4 +1,4 @@
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
 import com.kineticdata.bridgehub.adapter.QualificationParser;
 import java.nio.charset.Charset;

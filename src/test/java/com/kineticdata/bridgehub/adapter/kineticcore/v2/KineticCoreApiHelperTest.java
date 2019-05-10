@@ -3,8 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
+import com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreApiHelper;
 import com.kineticdata.bridgehub.adapter.BridgeAdapterTestBase;
 import com.kineticdata.bridgehub.adapter.Record;
 import java.util.ArrayList;
@@ -38,7 +39,7 @@ public class KineticCoreApiHelperTest {
         implicitIncludes.add("attributes");
         
         String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals(query, "include=fields%2Cdetails%2Cattributes");
+        assertEquals("include=fields%2Cdetails%2Cattributes&limit=1000", query);
     }
     
     @Test
@@ -51,9 +52,11 @@ public class KineticCoreApiHelperTest {
         implicitIncludes.add("attributes");
         
         String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals(query, "include=details%2Cattributes");
+        assertEquals("include=details%2Cattributes&limit=1000", query);
     }    
     
+    // This should never happen in the use of the adpater.  Implicit includes
+    //are set in the adapter.
     @Test
     public void test_build_empty_include() throws Exception {
         List<NameValuePair> parameters = new ArrayList<NameValuePair>();
@@ -63,7 +66,7 @@ public class KineticCoreApiHelperTest {
         parameters.add(new BasicNameValuePair("include", "fields"));
         
         String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals(query, "include=fields");
+        assertEquals("include=fields&limit=1000", query);
     }
     
     

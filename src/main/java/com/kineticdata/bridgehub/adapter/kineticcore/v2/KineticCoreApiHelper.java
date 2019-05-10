@@ -1,11 +1,11 @@
-package com.kineticdata.bridgehub.adapter.kineticcore;
+package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
 import com.kineticdata.bridgehub.adapter.Count;
 import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
-import static com.kineticdata.bridgehub.adapter.kineticcore.KineticCoreAdapter.logger;
+import static com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreAdapter.logger;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -79,8 +79,8 @@ public class KineticCoreApiHelper {
         // Check if forms or form property was returned.
         if (pluralResult != null) {
             if (pluralResult.size() > 1) {
-                throw new BridgeError("Retrieve may only return one Form. "
-                    + "Please check query");
+                throw new BridgeError("Retrieve may only return one " 
+                    + request.getStructure() + ". Please check query");
             } else {
                 singleResult = (JSONObject)pluralResult.get(0);
             }

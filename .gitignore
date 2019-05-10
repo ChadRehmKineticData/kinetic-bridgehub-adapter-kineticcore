@@ -5,5 +5,5 @@ nb-configuration.xml
 .settings/
 .vscode
 
-src/main/java/com/kineticdata/bridgehub/adapter/kineticcore/TODO.md
+src/main/java/com/kineticdata/bridgehub/adapter/kineticcore/v2/TODO.md
 src/test/resources/bridge-config.yml

@@ -16,9 +16,9 @@ Bridge Configuration:
 Test Request Configuration:
     Structure: "Forms"
     Fields: "slug"
-    Empty Value Query: ""
+    Empty Value Query: "kapps/services/forms?limit=100&q=name=*%22zzzzzzzz%22"
     Single Value Query: "kapps/services/forms/cleaning"
-    Multiple Value Query: "kapps/services/forms?q=name=*%22c%22"
+    Multiple Value Query: "kapps/services/forms?limit=100"
 
 # Configuration of the various metadata options
     # Pagination Type: Possible values (string) - offset,token,none
