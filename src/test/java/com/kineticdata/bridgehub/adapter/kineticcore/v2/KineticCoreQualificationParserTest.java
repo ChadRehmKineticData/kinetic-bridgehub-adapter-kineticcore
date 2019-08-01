@@ -36,7 +36,7 @@ public class KineticCoreQualificationParserTest {
     @Test
     public void test_parsePath() throws Exception {
         String path = parser.parsePath(
-            "kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22"
+            "kapps/services/forms?q=name=*\"c\" AND status=\"Active\""
         );
         
         assertEquals("kapps/services/forms",  path);
@@ -46,7 +46,7 @@ public class KineticCoreQualificationParserTest {
     public void test_parseQuery() throws Exception {
         
         List<NameValuePair> parameters = parser.parseQuery(
-            "kapps/services/forms?q=name=*%22c%22 AND status=%22Active%22"
+            "kapps/services/forms?q=name=*\"c\" AND status=\"Active\""
         );
         
         // Build the parameter map
@@ -60,7 +60,7 @@ public class KineticCoreQualificationParserTest {
     public void test_parseQuery_multi_param() throws Exception {
         
         List<NameValuePair> parameters = parser.parseQuery(
-            "kapps/services/forms?limit=100&q=name=*%22c%22 AND status=%22Active%22&"
+            "kapps/services/forms?limit=100&q=name=*\"c\" AND status=\"Active\"&"
         );
         
         // Build the parameter map
