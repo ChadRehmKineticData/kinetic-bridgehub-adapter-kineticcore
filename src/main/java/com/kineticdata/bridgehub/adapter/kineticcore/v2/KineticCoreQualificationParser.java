@@ -38,8 +38,6 @@ public class KineticCoreQualificationParser extends QualificationParser {
                 String[] str_array = query.split("=",2);
                 String field = str_array[0].trim();
                 String value = str_array[1].trim();
-//                if (str_array.length > 1) value = StringUtils
-//                    .join(Arrays.copyOfRange(str_array, 1, str_array.length),"=");
 
                 queryList.add( new BasicNameValuePair(field, value.trim()));
             }
