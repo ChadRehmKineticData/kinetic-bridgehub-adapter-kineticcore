@@ -3,19 +3,30 @@ package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 import com.kineticdata.bridgehub.adapter.BridgeAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeError;
 import com.kineticdata.bridgehub.adapter.BridgeRequest;
+import com.kineticdata.bridgehub.adapter.BridgeUtils;
 import com.kineticdata.bridgehub.adapter.Count;
 import com.kineticdata.bridgehub.adapter.Record;
 import com.kineticdata.bridgehub.adapter.RecordList;
 import com.kineticdata.commons.v1.config.ConfigurableProperty;
 import com.kineticdata.commons.v1.config.ConfigurablePropertyMap;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -107,14 +118,34 @@ public class KineticCoreAdapter implements BridgeAdapter {
     }
     
     public static class Mapping {
+        private final String structure;
         private final String plural;
         private final String singular;
         private final Set<String> implicitIncludes;
-
-        public Mapping(String plural, String singular, Collection<String> implicitIncludes) {
+        private List<String> paginationFields;
+        
+        public Mapping(String structure, String plural, String singular, 
+            Collection<String> implicitIncludes) {
+            
+            this.structure = structure;
             this.plural = plural;
             this.singular = singular;
             this.implicitIncludes = new LinkedHashSet<>(implicitIncludes);
+        }
+
+        public Mapping(String structure, String plural, String singular, 
+            Collection<String> implicitIncludes, 
+            Collection<String> paginationFields) {
+            
+            this.structure = structure;
+            this.plural = plural;
+            this.singular = singular;
+            this.implicitIncludes = new LinkedHashSet<>(implicitIncludes);
+            this.paginationFields = new ArrayList<>(paginationFields);
+        }
+        
+        public String getStructure() {
+            return structure;
         }
 
         public String getPlural() {
@@ -129,25 +160,40 @@ public class KineticCoreAdapter implements BridgeAdapter {
             return implicitIncludes;
         }
         
+        public List<String> getPaginationFields() {
+            return paginationFields;
+        }
+        
+        public void setPaginationFields (List<String> paginationFields) {
+            this.paginationFields = paginationFields;
+        }
+        
     }
     
     public static Map<String,Mapping> MAPPINGS 
         = new LinkedHashMap<String,Mapping>() {{
         
-        put("Submissions", new Mapping("submissions", "submission",
-            Arrays.asList("values","details")));
-        put("Forms", new Mapping("forms", "form", 
-            Arrays.asList("details", "attributes")));
-        put("Users", new Mapping("users", "user",
-            Arrays.asList("attributes", "profileAttributes")));
-        put("Teams", new Mapping("teams", "team", 
-            Arrays.asList("attributes","memberships","details")));
-        put("Kapps", new Mapping("kapps", "kapp", 
-            Arrays.asList("details", "attributes")));
-        put("Datastore Forms", new Mapping("forms", "form", 
-            Arrays.asList("values","details")));
-        put("Datastore Submissions", new Mapping("submissions", "submission",
-            Arrays.asList("details", "attributes")));
+        put("Submissions", new Mapping("Submissions", "submissions", "submission",
+            Arrays.asList("values","details"),
+            Arrays.asList("closedAt","createdAt","submittedAt","updatedAt")));
+        put("Forms", new Mapping("Forms", "forms", "form", 
+            Arrays.asList("details", "attributes"),
+            Arrays.asList("category", "createdAt", "name", "slug", "updatedAt",
+                "status", "type")));
+        put("Users", new Mapping("Users", "users", "user",
+            Arrays.asList("attributes", "profileAttributes"),
+            Arrays.asList("createdAt","displayName","email","updatedAt","username")));
+        put("Teams", new Mapping("Teams", "teams", "team", 
+            Arrays.asList("attributes","memberships","details"),
+            Arrays.asList("created", "localName", "name", "updatedAt")));
+        put("Kapps", new Mapping("Kapps", "kapps", "kapp", 
+            Arrays.asList("details", "attributes"),
+            Arrays.asList("createdAt", "name", "slug", "updateAt")));
+        put("Datastore Forms", new Mapping("Datastore Forms", "forms", "form", 
+            Arrays.asList("values","details"),
+            Arrays.asList("createdAt", "name", "slug", "updatedAt", "status")));
+        put("Datastore Submissions", new Mapping("Datastore Submissions", 
+            "submissions", "submission", Arrays.asList("details", "attributes")));
     }};
 
     /*---------------------------------------------------------------------------------------------
@@ -189,23 +235,146 @@ public class KineticCoreAdapter implements BridgeAdapter {
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
-
+        
         Mapping mapping = MAPPINGS.get(request.getStructure());
         if (mapping == null) {
             throw new BridgeError("Invalid Structure: '" 
                 + request.getStructure() + "' is not a valid structure");
         }
-
+        
         RecordList recordList;
         recordList = this.coreApiHelper.search(request, mapping);
+        
+        // Parse the query and exchange out any parameters with their parameter 
+        // values. ie. change the query username=<%=parameter["Username"]%> to
+        // username=test.user where parameter["Username"]=test.user
+        KineticCoreQualificationParser parser 
+            = new KineticCoreQualificationParser();
+        String queryString = parser.parse(request.getQuery(), 
+            request.getParameters());
+        
+        // get a List of the sort order items.
+        Map<String,String> uncastSortOrderItems =
+            BridgeUtils.parseOrder(request.getMetadata("order"));
+                
+        /* results of parseOrder does not allow for a structure that 
+         * guarantees order.  Casting is required to preserver order.
+         */
+        if (!(uncastSortOrderItems instanceof LinkedHashMap)) {
+            throw new IllegalArgumentException("MESSAGE");
+        }
+        LinkedHashMap<String,String> sortOrderItems =
+            (LinkedHashMap)uncastSortOrderItems;
 
+        boolean paginationSupported = false;
+        if (request.getStructure() == "Datastore Submissions") {            
+            mapping.setPaginationFields(getIndexs(queryString));
+            paginationSupported = paginationSupported(mapping,
+                request.getMetadata());
+            
+        } else if (request.getStructure() == "Submissions" 
+            || request.getStructure() == "Users"
+            || request.getStructure() == "Teams") {
+            
+            if (!(sortOrderItems.size() > 1)) {
+                paginationSupported = paginationSupported(mapping, queryString, 
+                    // Get the only item in the map.
+                    sortOrderItems.entrySet().iterator().next().getKey());
+            }
+            
+        } else {
+             paginationSupported = paginationSupported(mapping, queryString);
+        }
+
+        if (!paginationSupported) {            
+            // Sort the records if they are all returned.
+            if (request.getMetadata("order") != null 
+                && recordList.getMetadata().get("nextPageToken") == null) {
+
+                KappSubmissionComparator comparator =
+                    new KappSubmissionComparator(sortOrderItems);
+                Collections.sort(recordList.getRecords(), comparator);
+            } else {
+                Map <String, String> metadata = new HashMap<String, String>();
+                metadata.put("warning", "Results won't be ordered because there is "
+                    + "more than one page of results returned.");                
+                recordList.setMetadata (metadata);
+
+                logger.debug("Warning: Results won't be ordered because there is "
+                    + "more than one page of results returned.");
+            }
+        }
+        
         return recordList;
     }
 
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
+    protected boolean paginationSupported(Mapping mapping, String queryString, 
+        String paginationField) {
+        boolean supported = false;
+        
+        for(String field: mapping.getPaginationFields()) {
+            if (supported && queryString.contains(field)) {
+                supported = false;
+                break;
+            } else if (queryString.contains(field)) {
+                supported = true;
+            }
+        }
 
+        return supported;
+    }
+    
+    protected boolean paginationSupported(Mapping mapping, String queryString) {
+        boolean supported = false;
+
+        for(String field: mapping.getPaginationFields()) {
+            if (queryString.contains(field)) {
+                supported = true;
+            }
+        }
+        
+        return supported;
+    }
+    
+    protected boolean paginationSupported(Mapping mapping, 
+        Map<String, String> metadata) {
+        boolean supported = false;
+        
+        // check that Ordering has consistant direction.
+        supported = metadata.values().stream().map(String::toLowerCase)
+            .collect(Collectors.toSet()).size() <= 1;
+        
+        // If all sort fields are either ascending or descending continue chacking
+        // if pagination is supported.
+        if (supported) {
+            int idx = 0;
+            for (String field: metadata.keySet()) {
+                if (mapping.paginationFields.get(idx).equalsIgnoreCase(field)) {
+                    int x = 1;
+                }
+                idx++;
+            }
+        }
+        
+        return supported;
+    }
+    
+    protected List<String> getIndexs(String queryString) {
+        //Pattern to get all indexs in query.
+        Pattern MY_PATTERN = Pattern.compile("(index=(.+)&)");
+        Matcher m = MY_PATTERN.matcher(queryString);
+        String indexs = null;
+        while (m.find()) {
+            indexs = m.group(2);
+        }
+        
+        //return a List of indexs.
+        return Arrays.asList(indexs.split("\\s*,\\s*"));
+    }
+    
     private String substituteQueryParameters(BridgeRequest request) throws BridgeError {
         KineticCoreQualificationParser parser = new KineticCoreQualificationParser();
         return parser.parse(request.getQuery(),request.getParameters());

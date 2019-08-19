@@ -8,17 +8,13 @@ import com.kineticdata.bridgehub.adapter.RecordList;
 import static com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreAdapter.logger;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -60,7 +56,7 @@ public class KineticCoreApiHelper {
         String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
             null));
         
-        Map<String,String> metadata = new LinkedHashMap<String,String>();
+        Map<String,String> metadata = new LinkedHashMap<String, String>();
 
         metadata.put("pageToken",nextPageToken);
 
@@ -107,7 +103,7 @@ public class KineticCoreApiHelper {
         
         Map<String,String> metadata = new LinkedHashMap<String,String>();
 
-        metadata.put("pageToken",nextPageToken);
+        metadata.put("pageToken", nextPageToken);
 
         // Return the response
         return new RecordList(request.getFields(), records, metadata);

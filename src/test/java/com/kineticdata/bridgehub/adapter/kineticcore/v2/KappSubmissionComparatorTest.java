@@ -27,7 +27,7 @@ public class KappSubmissionComparatorTest extends BridgeAdapterTestBase {
     
     private List<Record> records = new ArrayList();
     private List<Record> expectedRecords = new ArrayList();
-    private List<String> fields = new ArrayList();
+    private Map<String, String> sortOrderItems = new HashMap();
 
     @Override
     public String getConfigFilePath() {
@@ -58,16 +58,48 @@ public class KappSubmissionComparatorTest extends BridgeAdapterTestBase {
         this.expectedRecords.add(this.record1);
         
         
-        this.fields.add("First Name");
+        this.sortOrderItems.put("First Name", "asc");
         
-        KappSubmissionComparator comparator = new KappSubmissionComparator(this.fields);
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
         
         Collections.sort(records, comparator);
-        Assert.assertThat(records, IsIterableContainingInOrder.contains(expectedRecords.toArray()));
+        Assert.assertThat(records, IsIterableContainingInOrder
+            .contains(expectedRecords.toArray()));
+    }
+    
+        
+    @Test
+    public void test_desc_compare() {
+        this.record1Map.put("First Name", "chad");
+        this.record2Map.put("First Name", "ben");
+        this.record3Map.put("First Name", "adam");
+        
+        this.record1.setRecord(this.record1Map);
+        this.record2.setRecord(this.record2Map);
+        this.record3.setRecord(this.record3Map);
+        
+        this.records.add(this.record1);
+        this.records.add(this.record2);
+        this.records.add(this.record3);
+        
+        this.expectedRecords.add(this.record1);
+        this.expectedRecords.add(this.record2);
+        this.expectedRecords.add(this.record3);
+        
+        
+        this.sortOrderItems.put("First Name", "desc");
+        
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
+        
+        Collections.sort(records, comparator);
+        Assert.assertThat(records, IsIterableContainingInOrder
+            .contains(expectedRecords.toArray()));
     }
     
     @Test
-    public void test_basic_rev_compare() {
+    public void test_alternate_basic_compare() {
         this.record1Map.put("First Name", "chad");
         this.record2Map.put("First Name", "ben");
         this.record3Map.put("First Name", "adam");
@@ -85,9 +117,10 @@ public class KappSubmissionComparatorTest extends BridgeAdapterTestBase {
         this.expectedRecords.add(this.record3);
         
         
-        this.fields.add("First Name");
+        this.sortOrderItems.put("First Name","asc");
         
-        KappSubmissionComparator comparator = new KappSubmissionComparator(this.fields);
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
         
         Collections.sort(records, comparator.reversed());
         Assert.assertThat(records, IsIterableContainingInOrder.contains(expectedRecords.toArray()));
@@ -114,13 +147,55 @@ public class KappSubmissionComparatorTest extends BridgeAdapterTestBase {
         this.expectedRecords.add(this.record2);
         this.expectedRecords.add(this.record1);    
         
-        this.fields.add("First Name");
-        this.fields.add("Last Name");
+        this.sortOrderItems.put("First Name", "asc");
+        this.sortOrderItems.put("Last Name", "asc");
         
-        KappSubmissionComparator comparator = new KappSubmissionComparator(this.fields);
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
         
         Collections.sort(records, comparator);
-        Assert.assertThat(records, IsIterableContainingInOrder.contains(expectedRecords.toArray()));
+        Assert.assertThat(records, 
+            IsIterableContainingInOrder.contains(expectedRecords.toArray()));
+    }
+    
+        @Test
+    public void test_two_mix_order_compare() {
+        Map <String, Object> record4Map = new HashMap<String, Object>();
+        Record record4 = new Record();
+        
+        this.record1Map.put("First Name", "mike");
+        this.record1Map.put("Last Name", "smith");
+        this.record2Map.put("First Name", "mike");
+        this.record2Map.put("Last Name", "joans");
+        this.record3Map.put("First Name", "jake");
+        this.record3Map.put("Last Name", "adams");
+        record4Map.put("First Name", "jake");
+        record4Map.put("Last Name", "johnson");
+        
+        this.record1.setRecord(this.record1Map);
+        this.record2.setRecord(this.record2Map);
+        this.record3.setRecord(this.record3Map);
+        record4.setRecord(record4Map);
+        
+        this.records.add(this.record1);
+        this.records.add(this.record2);
+        this.records.add(this.record3);
+        this.records.add(record4);
+        
+        this.expectedRecords.add(record4);
+        this.expectedRecords.add(this.record3);
+        this.expectedRecords.add(this.record1);  
+        this.expectedRecords.add(this.record2);  
+        
+        this.sortOrderItems.put("First Name", "asc");
+        this.sortOrderItems.put("Last Name", "desc");
+        
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
+        
+        Collections.sort(records, comparator);
+        Assert.assertThat(records, 
+            IsIterableContainingInOrder.contains(expectedRecords.toArray()));
     }
     
     @Test
@@ -156,13 +231,15 @@ public class KappSubmissionComparatorTest extends BridgeAdapterTestBase {
         this.expectedRecords.add(this.record3);
         this.expectedRecords.add(record4);    
         
-        this.fields.add("State");
-        this.fields.add("City");
-        this.fields.add("Street");
+        this.sortOrderItems.put("State", "asc");
+        this.sortOrderItems.put("City", "asc");
+        this.sortOrderItems.put("Street", "asc");
         
-        KappSubmissionComparator comparator = new KappSubmissionComparator(this.fields);
+        KappSubmissionComparator comparator =
+            new KappSubmissionComparator(this.sortOrderItems);
         
         Collections.sort(records, comparator);
-        Assert.assertThat(records, IsIterableContainingInOrder.contains(expectedRecords.toArray()));
+        Assert.assertThat(records, 
+            IsIterableContainingInOrder.contains(expectedRecords.toArray()));
     }
 }

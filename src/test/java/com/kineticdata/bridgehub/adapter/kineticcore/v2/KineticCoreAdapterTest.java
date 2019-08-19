@@ -11,6 +11,7 @@ import com.kineticdata.bridgehub.adapter.RecordList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
+import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -433,6 +435,24 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     }
     
     @Test
+    public void test_search_submissions_order() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/submissions?"
+                + "timeline=createdAt&direction=ASC");
+        
+        Map <String, String> metadata = new HashMap<>();
+        metadata.put("order", "<%=field[\"createdAt\"]%>:ASC");
+        request.setMetadata(metadata);
+        
+        List<String> list = Arrays.asList("createdAt", "label");
+        request.setFields(list);
+        
+        RecordList records = getAdapter().search(request);
+        String x = "1";
+    }
+    
+    @Test
     public void test_count_submissions() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Submissions");
@@ -443,6 +463,35 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         Count count = getAdapter().count(request);
         String x = "1";
+    }
+    
+    @Test
+    public void test_index_parse() throws Exception {
+        List<String> expectedResult = new ArrayList<String>();
+        expectedResult.add("values[Related Id]");
+        expectedResult.add("values[Status]");
+        
+        KineticCoreAdapter adapterClass = new KineticCoreAdapter();
+        List<String> result = adapterClass
+            .getIndexs("formSlug=milestones&limit=1000&index=values[Related Id],"
+                + "values[Status]&q=values[Status]=\"Active\"");
+        
+        Assert.assertTrue(result.containsAll(expectedResult));
+    }
+    
+        
+    @Test
+    public void test_index_parse_white_space() throws Exception {
+        List<String> expectedResult = new ArrayList<String>();
+        expectedResult.add("values[Related Id]");
+        expectedResult.add("values[Status]");
+        
+        KineticCoreAdapter adapterClass = new KineticCoreAdapter();
+        List<String> result = adapterClass
+            .getIndexs("formSlug=milestones&limit=1000&index=values[Related Id] , "
+                + "values[Status]&q=values[Status]=\"Active\"");
+        
+        Assert.assertTrue(result.containsAll(expectedResult));
     }
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS

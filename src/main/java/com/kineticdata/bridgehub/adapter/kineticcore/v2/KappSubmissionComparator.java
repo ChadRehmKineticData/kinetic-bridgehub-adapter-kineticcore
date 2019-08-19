@@ -7,7 +7,7 @@ package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
 import com.kineticdata.bridgehub.adapter.Record;
 import java.util.Comparator;
-import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -15,23 +15,30 @@ import java.util.List;
  */
 public class KappSubmissionComparator implements Comparator<Record> {
 
-  private List<String> recordFields;
+  private Map<String, String> sortOrderItems;
 
-  public KappSubmissionComparator(List<String> recordFields) {
-    this.recordFields = recordFields;
+  public KappSubmissionComparator(Map<String, String> sortOrderItems) {
+    this.sortOrderItems = sortOrderItems;
   }
 
   public int compare(Record r1, Record r2) {
     int result = 0;
 
-    for (String recordField : recordFields) {
-      String r1Value = normalize(r1.getValue(recordField).toString());
-      String r2Value = normalize(r2.getValue(recordField).toString());
-      int fieldComparison = r1Value.compareTo(r2Value);
-      if (fieldComparison != 0) {
-        result = fieldComparison;
-        break;
-      }
+    for (Map.Entry<String,String> sortOrderItem : sortOrderItems.entrySet()) {
+        String fieldName = sortOrderItem.getKey();
+        boolean isAscending = "asc".equals(sortOrderItem.getValue().toLowerCase());
+        
+        String r1Value = normalize(r1.getValue(fieldName).toString());
+        String r2Value = normalize(r2.getValue(fieldName).toString());
+        
+        // Order based on field direction specified
+        int fieldComparison = (isAscending)
+            ? r1Value.compareTo(r2Value)
+            : r2Value.compareTo(r1Value);
+        if (fieldComparison != 0) {
+            result = fieldComparison;
+            break;
+        }
     }
 
     return result;
