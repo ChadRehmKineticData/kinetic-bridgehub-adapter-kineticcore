@@ -207,6 +207,9 @@ public class KineticCoreAdapter implements BridgeAdapter {
      *-------------------------------------------------------------------------------------------*/
 
     private String substituteQueryParameters(BridgeRequest request) throws BridgeError {
+        // Parse the query and exchange out any parameters with their parameter 
+        // values. ie. change the query username=<%=parameter["Username"]%> to
+        // username=test.user where parameter["Username"]=test.user
         KineticCoreQualificationParser parser = new KineticCoreQualificationParser();
         return parser.parse(request.getQuery(),request.getParameters());
     }

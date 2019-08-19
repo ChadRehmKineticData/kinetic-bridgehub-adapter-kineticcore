@@ -208,20 +208,15 @@ public class KineticCoreApiHelper {
     public String executeRequest (BridgeRequest request, 
         Set<String> implicitIncludes) throws BridgeError{
         
-        // Parse the query and exchange out any parameters with their parameter 
-        // values. ie. change the query username=<%=parameter["Username"]%> to
-        // username=test.user where parameter["Username"]=test.user
         KineticCoreQualificationParser parser 
             = new KineticCoreQualificationParser();
-        String queryString = parser.parse(request.getQuery(), 
-            request.getParameters());
         
         // Get a List of the parameters without the "path"
-        List<NameValuePair> parameters = parser.parseQuery(queryString);
+        List<NameValuePair> parameters = parser.parseQuery(request.getQuery());
  
         
         String url = String.format("%s/app/api/v1/%s?%s", this.spaceUrl, 
-            parser.parsePath(queryString), buildQuery(parameters, 
+            parser.parsePath(request.getQuery()), buildQuery(parameters, 
                 implicitIncludes));
         
         HttpClient client = HttpClients.createDefault();
@@ -240,7 +235,7 @@ public class KineticCoreApiHelper {
             if (response.getStatusLine().getStatusCode() == 404) {
                 throw new BridgeError(String.format(
                     "Not Found: %s not found at %s.", request.getStructure(),
-                    String.join(",", parser.parsePath(queryString))));
+                    String.join(",", parser.parsePath(request.getQuery()))));
             }
             output = EntityUtils.toString(entity);
         }
