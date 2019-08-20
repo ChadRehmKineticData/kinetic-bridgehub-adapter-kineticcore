@@ -8,8 +8,10 @@ import com.kineticdata.bridgehub.adapter.RecordList;
 import static com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreAdapter.logger;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,16 +52,22 @@ public class KineticCoreApiHelper {
         KineticCoreAdapter.Mapping mapping) throws BridgeError {
         
         String responce = executeRequest(request, mapping.getImplicitIncludes());
-        JSONObject json = (JSONObject)JSONValue.parse(responce);
-        JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
-        
-        String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
-            null));
         
         Map<String,String> metadata = new LinkedHashMap<String, String>();
+        JSONArray pluralResult = new JSONArray();
+        
+        try {
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            pluralResult = (JSONArray)json.get(mapping.getPlural());
 
-        metadata.put("pageToken",nextPageToken);
+            String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+                null));
 
+            metadata.put("pageToken",nextPageToken);
+        } catch (Exception e) {
+            
+        }
+            
         // Create count object
         return new Count(pluralResult.size(), metadata);
     }
@@ -68,20 +76,26 @@ public class KineticCoreApiHelper {
         KineticCoreAdapter.Mapping mapping) throws BridgeError {
         
         String responce = executeRequest(request, mapping.getImplicitIncludes());
-        JSONObject json = (JSONObject)JSONValue.parse(responce);
-        JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
         
-        JSONObject singleResult;
-        // Check if forms or form property was returned.
-        if (pluralResult != null) {
-            if (pluralResult.size() > 1) {
-                throw new BridgeError("Retrieve may only return one " 
-                    + request.getStructure() + ". Please check query");
+        JSONObject singleResult = new JSONObject();
+        
+        try {    
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+            
+            // Check if forms or form property was returned.
+            if (pluralResult != null) {
+                if (pluralResult.size() > 1) {
+                    throw new BridgeError("Retrieve may only return one " 
+                        + request.getStructure() + ". Please check query");
+                } else {
+                    singleResult = (JSONObject)pluralResult.get(0);
+                }
             } else {
-                singleResult = (JSONObject)pluralResult.get(0);
+                singleResult = (JSONObject)json.get(mapping.getSingular());
             }
-        } else {
-            singleResult = (JSONObject)json.get(mapping.getSingular());
+        } catch (Exception e) {
+            
         }
         
         return createRecord(request.getFields(), singleResult);
@@ -91,20 +105,25 @@ public class KineticCoreApiHelper {
         KineticCoreAdapter.Mapping mapping) throws BridgeError {
 
         String responce = executeRequest(request, mapping.getImplicitIncludes());
-        JSONObject json = (JSONObject)JSONValue.parse(responce);
-        JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
-        
-        List<Record> records = (pluralResult == null)
-            ? Collections.emptyList()
-            : createRecords(request.getFields(), pluralResult);
 
-        String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
-            null));
-        
+        List<Record> records = new ArrayList<Record>();
         Map<String,String> metadata = new LinkedHashMap<String,String>();
+        
+        try {
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+       
+            records = (pluralResult == null)
+                ? Collections.emptyList()
+                : createRecords(request.getFields(), pluralResult);
 
-        metadata.put("pageToken", nextPageToken);
-
+            String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+                null));
+            metadata.put("pageToken", nextPageToken);
+        } catch (Exception e) {
+            
+        }
+        
         // Return the response
         return new RecordList(request.getFields(), records, metadata);
     }

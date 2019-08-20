@@ -11,23 +11,13 @@ import com.kineticdata.bridgehub.adapter.RecordList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import org.apache.http.NameValuePair;
-import org.apache.http.message.BasicNameValuePair;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.JSONValue;
 import org.junit.Assert;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
@@ -45,6 +35,18 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     @Override
     public Class getAdapterClass() {
         return KineticCoreAdapter.class;
+    }
+    
+    @Test
+    public void test_simpleCount() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Forms");
+        request.setQuery("kapps/services/forms/cleaning");
+        
+        Count count = getAdapter().count(request);
+        int value = count.getValue();
+        
+        Assert.assertEquals(1,value);
     }
     
     @Test
@@ -131,7 +133,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -203,7 +205,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -230,7 +232,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -269,7 +271,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -327,7 +329,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -353,7 +355,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Count count = getAdapter().count(request);
-        String x = "1";
+        Assert.assertTrue(count.getValue() > 0);
     }
         
     @Test
@@ -366,7 +368,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -392,7 +394,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Count count = getAdapter().count(request);
-        String x = "1";
+        Assert.assertTrue(count.getValue() > 0);
     }
     
         @Test
@@ -405,7 +407,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Record record = getAdapter().retrieve(request);
-        String x = "1";
+        Assert.assertTrue(record.getRecord().size() > 0);
     }
     
     @Test
@@ -462,7 +464,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Count count = getAdapter().count(request);
-        String x = "1";
+        Assert.assertTrue(count.getValue() > 0);
     }
     
     @Test
@@ -493,58 +495,74 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         Assert.assertTrue(result.containsAll(expectedResult));
     }
-    /*---------------------------------------------------------------------------------------------
-     * HELPER METHODS
-     *-------------------------------------------------------------------------------------------*/
     
-    /**
-      The JSON array will be built from a mock JSON string with the following 5 users
-      
-        username: test.user
-        email: test.user@acme.com
-        display name: Test user
-        attributes: [First Name = Test, Last Name = User]
-        profileAttributes: []
-        space admin: false
-        enabled: false
+    @Test
+    public void test_paginationSupported_3() throws Exception {
+        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
         
-        username: don.demo@kineticdata.com
-        email: don.demo@kineticdata.com
-        display name: Don Demo
-        attributes: [Group = Fulfillment::IT]
-        profileAttributes: [Task Administrator = true]
-        space admin: false
-        enabled: true
+        KineticCoreAdapter.Mapping mapping =
+            new KineticCoreAdapter.Mapping("Datastore Submissions", "submissions",
+                "submission", Arrays.asList("details", "attributes"));
         
-        username: prod.user@kineticdata.com
-        email: prod.user@kineticdata.com
-        display name: Production User
-        attributes: []
-        profileAttributes: [Task Administrator = true]
-        space admin: true
-        enabled: true
+        List<String> paginationFields = new ArrayList<>();
+        LinkedHashMap<String, String> sortOrderItems = new LinkedHashMap<>();
+  
+        mapping.setPaginationFields(paginationFields);      
+        paginationFields.add("values[Status]");
+        sortOrderItems.put("values[Status]","ASC");
         
-        username: jeff.johnson@gmail.com
-        email: jeff.johnson@gmail.com
-        display name: Jeff Johnson
-        attributes: [First Name = [Jeff, Jeffery], Last Name = Johnson]
-        profileAttributes: [Task Administrator = false]
-        space admin: true
-        enabled: true
+        // Test index and order fields match
+        boolean supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertTrue(supported);
         
-        username: dev.user@kineticdata.dev
-        email: dev.user@kineticdata.dev
-        display name: Test user
-        attributes: []
-        profileAttributes: []
-        space admin: true
-        enabled: true
-    */    
-    public JSONArray buildUserRecordArray() {
-        if (userRecordsMockData == null) {
-            userRecordsMockData = "{\"users\":[{\"attributes\":[{\"values\":[\"Test\"],\"name\":\"First Name\"},{\"values\":[\"User\"],\"name\":\"Last Name\"}],\"profileAttributes\":[],\"displayName\":\"Test User\",\"email\":\"test.user@acme.com\",\"enabled\":false,\"spaceAdmin\":false,\"username\":\"test.user\"},{\"attributes\":[{\"values\":[\"Fulfillment::IT\"],\"name\":\"Group\"}],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"true\"]}],\"displayName\":\"Don Demo\",\"email\":\"don.demo@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":false,\"username\":\"don.demo@kineticdata.com\"},{\"attributes\":[],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"true\"]}],\"displayName\":\"Production User\",\"email\":\"prod.user@kineticdata.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"prod.user@kineticdata.com\"},{\"attributes\":[{\"values\":[\"Jeff\",\"Jeffery\"],\"name\":\"First Name\"},{\"values\":[\"Johnson\"],\"name\":\"Last Name\"}],\"profileAttributes\":[{\"name\":\"Task Administrator\",\"values\":[\"false\"]}],\"displayName\":\"Jeff Johnson\",\"email\":\"jeff.johnson@gmail.com\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"jeff.johnson@gmail.com\"},{\"attributes\":[],\"profileAttributes\":[],\"displayName\":\"Development User\",\"email\":\"dev.user@kineticdata.dev\",\"enabled\":true,\"spaceAdmin\":true,\"username\":\"dev.user@kineticdata.dev\"}]}";
-        }
-        JSONObject jsonObject = (JSONObject)JSONValue.parse(userRecordsMockData);
-        return (JSONArray)jsonObject.get("users");
+        // Test additional indexs and order fields with same direction
+        paginationFields.add("values[Related Id]");
+        sortOrderItems.put("values[Related Id]","ASC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertTrue(supported);
+        
+        // Test that mixed direction fails
+        sortOrderItems.replace("values[Related Id]", "DESC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+        
+        // Test that mismatched list sizes fails
+        sortOrderItems.remove("values[Related Id]");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+        
+        // Test that index out of order fails
+        sortOrderItems.clear();
+        sortOrderItems.put("values[Related Id]","ASC");
+        sortOrderItems.put("values[Status]","ASC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+    }
+    
+    @Test
+    public void test_paginationSupported_1() throws Exception {
+        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
+        
+        KineticCoreAdapter.Mapping mapping =
+            new KineticCoreAdapter.Mapping("Submissions", "submissions", 
+            "submission", Arrays.asList("values","details"),
+            Arrays.asList("closedAt","createdAt","submittedAt","updatedAt"));
+        
+        String queryString = "kapps/services/submissions?timeline=createdAt&direction=DESC";
+        
+        List<String> paginationFields = new ArrayList<>();
+        mapping.setPaginationFields(paginationFields);      
+        paginationFields.add("createdAt");
+        
+        // Test paginatable field is included in query string
+        boolean supported = kCoreAdp.paginationSupported(mapping, queryString,
+            "createdAt");
+        Assert.assertTrue(supported);
+        
+        // Test that query string has no paginatable field returns false
+        queryString = "kapps/services/submissions";
+        supported = kCoreAdp.paginationSupported(mapping, queryString,
+            "createdAt");
+        Assert.assertFalse(supported);
     }
 }

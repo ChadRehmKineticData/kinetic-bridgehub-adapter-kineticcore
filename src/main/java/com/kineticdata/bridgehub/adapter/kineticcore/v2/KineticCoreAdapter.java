@@ -253,55 +253,57 @@ public class KineticCoreAdapter implements BridgeAdapter {
         String queryString = parser.parse(request.getQuery(), 
             request.getParameters());
         
-        // get a List of the sort order items.
-        Map<String,String> uncastSortOrderItems =
-            BridgeUtils.parseOrder(request.getMetadata("order"));
-                
-        /* results of parseOrder does not allow for a structure that 
-         * guarantees order.  Casting is required to preserver order.
-         */
-        if (!(uncastSortOrderItems instanceof LinkedHashMap)) {
-            throw new IllegalArgumentException("MESSAGE");
-        }
-        LinkedHashMap<String,String> sortOrderItems =
-            (LinkedHashMap)uncastSortOrderItems;
-
+        
         boolean paginationSupported = false;
-        if (request.getStructure() == "Datastore Submissions") {            
-            mapping.setPaginationFields(getIndexs(queryString));
-            paginationSupported = paginationSupported(mapping,
-                request.getMetadata());
+        if (request.getMetadata("order") != null) {
+            // get a List of the sort order items.
+            Map<String,String> uncastSortOrderItems =
+                BridgeUtils.parseOrder(request.getMetadata("order"));
+
+            /* results of parseOrder does not allow for a structure that 
+             * guarantees order.  Casting is required to preserver order.
+             */
+            if (!(uncastSortOrderItems instanceof LinkedHashMap)) {
+                throw new IllegalArgumentException("MESSAGE");
+            }
+            LinkedHashMap<String,String> sortOrderItems =
+                (LinkedHashMap)uncastSortOrderItems;
             
-        } else if (request.getStructure() == "Submissions" 
-            || request.getStructure() == "Users"
-            || request.getStructure() == "Teams") {
-            
-            if (!(sortOrderItems.size() > 1)) {
-                paginationSupported = paginationSupported(mapping, queryString, 
-                    // Get the only item in the map.
-                    sortOrderItems.entrySet().iterator().next().getKey());
+            if (request.getStructure() == "Datastore Submissions") { 
+
+                mapping.setPaginationFields(getIndexs(queryString));
+                paginationSupported = paginationSupported(mapping, sortOrderItems);  
+
+            } else if (request.getStructure() == "Submissions" 
+                || request.getStructure() == "Users"
+                || request.getStructure() == "Teams") {
+
+                if (!(sortOrderItems.size() == 1)) {
+                    paginationSupported = paginationSupported(mapping, queryString, 
+                        // Get the only item in the map.
+                        sortOrderItems.entrySet().iterator().next().getKey());
+                }
+
+            } else {
+                paginationSupported = paginationSupported(mapping, queryString);
             }
             
-        } else {
-             paginationSupported = paginationSupported(mapping, queryString);
-        }
+            if (!paginationSupported) {            
+                // Sort the records if they are all returned.
+                if (recordList.getMetadata().get("nextPageToken") == null) {
 
-        if (!paginationSupported) {            
-            // Sort the records if they are all returned.
-            if (request.getMetadata("order") != null 
-                && recordList.getMetadata().get("nextPageToken") == null) {
+                    KappSubmissionComparator comparator =
+                        new KappSubmissionComparator(sortOrderItems);
+                    Collections.sort(recordList.getRecords(), comparator);
+                } else {
+                    Map <String, String> metadata = new HashMap<String, String>();
+                    metadata.put("warning", "Results won't be ordered because there "
+                        + "was more than one page of results returned.");                
+                    recordList.setMetadata (metadata);
 
-                KappSubmissionComparator comparator =
-                    new KappSubmissionComparator(sortOrderItems);
-                Collections.sort(recordList.getRecords(), comparator);
-            } else {
-                Map <String, String> metadata = new HashMap<String, String>();
-                metadata.put("warning", "Results won't be ordered because there is "
-                    + "more than one page of results returned.");                
-                recordList.setMetadata (metadata);
-
-                logger.debug("Warning: Results won't be ordered because there is "
-                    + "more than one page of results returned.");
+                    logger.debug("Warning: Results won't be ordered because there "
+                        + "was more than one page of results returned.");
+                }
             }
         }
         
@@ -311,6 +313,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
+    // TODO: confirm that direction in order metadata matches qualification mapping. 
     protected boolean paginationSupported(Mapping mapping, String queryString, 
         String paginationField) {
         boolean supported = false;
@@ -327,6 +330,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
         return supported;
     }
     
+    // TODO: confirm that direction in order metadata matches qualification mapping.
     protected boolean paginationSupported(Mapping mapping, String queryString) {
         boolean supported = false;
 
@@ -339,37 +343,48 @@ public class KineticCoreAdapter implements BridgeAdapter {
         return supported;
     }
     
+    // TODO: confirm that direction in order metadata matches qualification mapping.
     protected boolean paginationSupported(Mapping mapping, 
-        Map<String, String> metadata) {
+        LinkedHashMap<String, String> sortOrderItems) {
         boolean supported = false;
         
         // check that Ordering has consistant direction.
-        supported = metadata.values().stream().map(String::toLowerCase)
+        supported = sortOrderItems.values().stream().map(String::toLowerCase)
             .collect(Collectors.toSet()).size() <= 1;
         
         // If all sort fields are either ascending or descending continue chacking
-        // if pagination is supported.
-        if (supported) {
+        // if pagination is supported with all index in same order and quanity.
+        if (sortOrderItems.size() == mapping.paginationFields.size()
+                && supported) {
+            
             int idx = 0;
-            for (String field: metadata.keySet()) {
-                if (mapping.paginationFields.get(idx).equalsIgnoreCase(field)) {
-                    int x = 1;
+            for (String field: sortOrderItems.keySet()) {
+                if (!mapping.paginationFields.get(idx).equalsIgnoreCase(field)) {
+                    supported = false;
+                    break;
                 }
                 idx++;
             }
+        } else {
+            supported = false;
         }
         
         return supported;
     }
     
-    protected List<String> getIndexs(String queryString) {
-        //Pattern to get all indexs in query.
-        Pattern MY_PATTERN = Pattern.compile("(index=(.+)&)");
+    protected String parseParameter(String queryString, String parameter) {
+         //Pattern to get all indexs in query.
+        Pattern MY_PATTERN = Pattern.compile("[\\?\\&](" + parameter + "([^\\&]+))");
         Matcher m = MY_PATTERN.matcher(queryString);
-        String indexs = null;
+        String result = null;
         while (m.find()) {
-            indexs = m.group(2);
+            result = m.group(2);
         }
+        return result;
+    }
+    
+    protected List<String> getIndexs(String queryString) {
+         String indexs = parseParameter(queryString, "index");
         
         //return a List of indexs.
         return Arrays.asList(indexs.split("\\s*,\\s*"));
