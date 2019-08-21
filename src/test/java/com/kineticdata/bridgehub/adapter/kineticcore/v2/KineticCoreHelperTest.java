@@ -5,10 +5,11 @@
  */
 package com.kineticdata.bridgehub.adapter.kineticcore.v2;
 
-import com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreApiHelper;
+import com.kineticdata.bridgehub.adapter.kineticcore.v2.KineticCoreAdapter;
 import com.kineticdata.bridgehub.adapter.BridgeAdapterTestBase;
 import com.kineticdata.bridgehub.adapter.Record;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,6 +20,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.message.BasicNameValuePair;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.junit.Assert;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -26,13 +28,13 @@ import static org.junit.Assert.*;
  *
  * @author chad.rehm
  */
-public class KineticCoreApiHelperTest {
+public class KineticCoreHelperTest {
     
     @Test
     public void test_build_query() throws Exception {
         List<NameValuePair> parameters = new ArrayList<NameValuePair>();
         Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         parameters.add(new BasicNameValuePair("include", "fields"));
         implicitIncludes.add("details");
@@ -46,7 +48,7 @@ public class KineticCoreApiHelperTest {
     public void test_build_empty_param() throws Exception {
         List<NameValuePair> parameters = new ArrayList<NameValuePair>();
         Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         implicitIncludes.add("details");
         implicitIncludes.add("attributes");
@@ -61,7 +63,7 @@ public class KineticCoreApiHelperTest {
     public void test_build_empty_include() throws Exception {
         List<NameValuePair> parameters = new ArrayList<NameValuePair>();
         Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         parameters.add(new BasicNameValuePair("include", "fields"));
         
@@ -69,7 +71,75 @@ public class KineticCoreApiHelperTest {
         assertEquals("include=fields&limit=1000", query);
     }
     
+    @Test
+    public void test_paginationSupported_3() throws Exception {
+        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
+        
+        KineticCoreAdapter.Mapping mapping =
+            new KineticCoreAdapter.Mapping("Datastore Submissions", "submissions",
+                "submission", Arrays.asList("details", "attributes"));
+        
+        List<String> paginationFields = new ArrayList<>();
+        LinkedHashMap<String, String> sortOrderItems = new LinkedHashMap<>();
+  
+        mapping.setPaginationFields(paginationFields);      
+        paginationFields.add("values[Status]");
+        sortOrderItems.put("values[Status]","ASC");
+        
+        // Test index and order fields match
+        boolean supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertTrue(supported);
+        
+        // Test additional indexs and order fields with same direction
+        paginationFields.add("values[Related Id]");
+        sortOrderItems.put("values[Related Id]","ASC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertTrue(supported);
+        
+        // Test that mixed direction fails
+        sortOrderItems.replace("values[Related Id]", "DESC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+        
+        // Test that mismatched list sizes fails
+        sortOrderItems.remove("values[Related Id]");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+        
+        // Test that index out of order fails
+        sortOrderItems.clear();
+        sortOrderItems.put("values[Related Id]","ASC");
+        sortOrderItems.put("values[Status]","ASC");
+        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
+        Assert.assertFalse(supported);
+    }
     
+    @Test
+    public void test_paginationSupported_1() throws Exception {
+        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
+        
+        KineticCoreAdapter.Mapping mapping =
+            new KineticCoreAdapter.Mapping("Submissions", "submissions", 
+            "submission", Arrays.asList("values","details"),
+            Arrays.asList("closedAt","createdAt","submittedAt","updatedAt"));
+        
+        String queryString = "kapps/services/submissions?timeline=createdAt&direction=DESC";
+        
+        List<String> paginationFields = new ArrayList<>();
+        mapping.setPaginationFields(paginationFields);      
+        paginationFields.add("createdAt");
+        
+        // Test paginatable field is included in query string
+        boolean supported = kCoreAdp.paginationSupported(mapping, queryString,
+            "createdAt");
+        Assert.assertTrue(supported);
+        
+        // Test that query string has no paginatable field returns false
+        queryString = "kapps/services/submissions";
+        supported = kCoreAdp.paginationSupported(mapping, queryString,
+            "createdAt");
+        Assert.assertFalse(supported);
+    }
     /*--------------------------------------------------------------------------
     Temp Test for flattenNestedFields
     --------------------------------------------------------------------------*/
@@ -117,7 +187,7 @@ public class KineticCoreApiHelperTest {
         fields.add("attributes[Icon]");
         fields.add("attributes");
         
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         Object obj = parser.parse(forms);
         JSONArray array = (JSONArray)obj;
@@ -138,7 +208,7 @@ public class KineticCoreApiHelperTest {
         
         List<Record> records = helper.createRecords(fields, array);
         
-//        assertEquals(records, mockRecords);
+//       assertEquals(records, mockRecords);
     }
     
     @Test
@@ -148,7 +218,7 @@ public class KineticCoreApiHelperTest {
         fields.add("id");
         fields.add("values[Status]");
         
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         Object obj = parser.parse(submissions);
         JSONArray array = (JSONArray)obj;
@@ -175,7 +245,7 @@ public class KineticCoreApiHelperTest {
         fields.add("attributesMap");
         fields.add("timezone");
         
-        KineticCoreApiHelper helper = new KineticCoreApiHelper("user","pass","instance");
+        KineticCoreAdapter helper = new KineticCoreAdapter();
        
         Object obj = parser.parse(users);
         JSONArray array = (JSONArray)obj;

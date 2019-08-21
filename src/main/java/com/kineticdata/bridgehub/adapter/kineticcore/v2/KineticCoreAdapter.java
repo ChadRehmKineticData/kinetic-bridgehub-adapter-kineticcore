@@ -10,6 +10,7 @@ import com.kineticdata.bridgehub.adapter.RecordList;
 import com.kineticdata.commons.v1.config.ConfigurableProperty;
 import com.kineticdata.commons.v1.config.ConfigurablePropertyMap;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -30,10 +31,16 @@ import java.util.stream.Collectors;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -74,6 +81,8 @@ public class KineticCoreAdapter implements BridgeAdapter {
     private String password;
     private String spaceUrl;
     private KineticCoreApiHelper coreApiHelper;
+    private KineticCoreQualificationParser parser;
+    private static final Pattern NESTED_PATTERN = Pattern.compile("(.*?)\\[(.*?)\\]");
 
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
         new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
@@ -110,7 +119,9 @@ public class KineticCoreAdapter implements BridgeAdapter {
         this.spaceUrl = properties.getValue(Properties.SPACE_URL);
         this.username = properties.getValue(Properties.USERNAME);
         this.password = properties.getValue(Properties.PASSWORD);
-        this.coreApiHelper = new KineticCoreApiHelper(this.username, this.password, this.spaceUrl);
+        this.coreApiHelper = new KineticCoreApiHelper(this.username, 
+            this.password, this.spaceUrl);
+        this.parser = new KineticCoreQualificationParser();
 
         // Testing the configuration values to make sure that they
         // correctly authenticate with Core
@@ -204,55 +215,104 @@ public class KineticCoreAdapter implements BridgeAdapter {
     public Count count(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
         
-        Mapping mapping = MAPPINGS.get(request.getStructure());
-        if (mapping == null) {
-            throw new BridgeError("Invalid Structure: '" 
-                + request.getStructure() + "' is not a valid structure");
+        Mapping mapping = getMapping(request.getStructure());
+        
+        String responce = coreApiHelper.executeRequest(request, 
+            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
+            parser);
+        
+        Map<String,String> metadata = new LinkedHashMap<String, String>();
+        int count = 0;
+        
+        try {
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            JSONArray pluralResult = new JSONArray();
+            
+            pluralResult = (JSONArray)json.get(mapping.getPlural());
+            // Check if forms or form property was returned.
+            if (pluralResult != null) {
+                count = pluralResult.size();
+            } else if ((JSONObject)json.get(mapping.getSingular()) != null) {
+                count = 1;
+            } else {
+                count = 0;
+            }
+            
+            String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+                null));
+
+            metadata.put("pageToken",nextPageToken);
+        } catch (Exception e) {
+            
         }
         
-        Count count = null;
-        count = this.coreApiHelper.count(request, mapping);
-        
-        return count;
+        return new Count(count, metadata);
     }
 
     @Override
     public Record retrieve(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
 
-        Mapping mapping = MAPPINGS.get(request.getStructure());
-        if (mapping == null) {
-            throw new BridgeError("Invalid Structure: '" 
-                + request.getStructure() + "' is not a valid structure");
+        Mapping mapping = getMapping(request.getStructure());
+
+        String responce = coreApiHelper.executeRequest(request, 
+            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
+            parser);
+        
+        JSONObject singleResult = new JSONObject();
+        
+        try {    
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+            
+            // Check if forms or form property was returned.
+            if (pluralResult != null) {
+                if (pluralResult.size() > 1) {
+                    throw new BridgeError("Retrieve may only return one " 
+                        + request.getStructure() + ". Please check query");
+                } else {
+                    singleResult = (JSONObject)pluralResult.get(0);
+                }
+            } else {
+                singleResult = (JSONObject)json.get(mapping.getSingular());
+            }
+        } catch (Exception e) {
+            
         }
-
-        Record record;
-        record = this.coreApiHelper.retrieve(request, mapping);
-
-        return record;
+        
+        return createRecord(request.getFields(), singleResult);
     }
 
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
         
-        Mapping mapping = MAPPINGS.get(request.getStructure());
-        if (mapping == null) {
-            throw new BridgeError("Invalid Structure: '" 
-                + request.getStructure() + "' is not a valid structure");
-        }
+        Mapping mapping = getMapping(request.getStructure());
         
-        RecordList recordList;
-        recordList = this.coreApiHelper.search(request, mapping);
-        
-        // Parse the query and exchange out any parameters with their parameter 
-        // values. ie. change the query username=<%=parameter["Username"]%> to
-        // username=test.user where parameter["Username"]=test.user
-        KineticCoreQualificationParser parser 
-            = new KineticCoreQualificationParser();
         String queryString = parser.parse(request.getQuery(), 
             request.getParameters());
+ 
+        String responce = coreApiHelper.executeRequest(request, 
+            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
+            parser);
+
+        List<Record> records = new ArrayList<Record>();
+        Map<String,String> metadata = new LinkedHashMap<String,String>();
         
+        try {
+            JSONObject json = (JSONObject)JSONValue.parse(responce);
+            JSONArray pluralResult = (JSONArray)json.get(mapping.getPlural());
+       
+            records = (pluralResult == null)
+                ? Collections.emptyList()
+                : createRecords(request.getFields(), pluralResult);
+
+            String nextPageToken = String.valueOf(json.getOrDefault("nextPageToken",
+                null));
+            metadata.put("pageToken", nextPageToken);
+        } catch (Exception e) {
+            
+        }
         
         boolean paginationSupported = false;
         if (request.getMetadata("order") != null) {
@@ -269,9 +329,12 @@ public class KineticCoreAdapter implements BridgeAdapter {
             LinkedHashMap<String,String> sortOrderItems =
                 (LinkedHashMap)uncastSortOrderItems;
             
+            Map <String, String> parameters = parser.getParameters(queryString);
             if (request.getStructure() == "Datastore Submissions") { 
 
-                mapping.setPaginationFields(getIndexs(queryString));
+                mapping.setPaginationFields(
+                    Arrays.asList(parameters.get("index").split("\\s*,\\s*"))
+                );
                 paginationSupported = paginationSupported(mapping, sortOrderItems);  
 
             } else if (request.getStructure() == "Submissions" 
@@ -290,16 +353,14 @@ public class KineticCoreAdapter implements BridgeAdapter {
             
             if (!paginationSupported) {            
                 // Sort the records if they are all returned.
-                if (recordList.getMetadata().get("nextPageToken") == null) {
+                if ( metadata.get("nextPageToken") == null) {
 
                     KappSubmissionComparator comparator =
                         new KappSubmissionComparator(sortOrderItems);
-                    Collections.sort(recordList.getRecords(), comparator);
+                    Collections.sort(records, comparator);
                 } else {
-                    Map <String, String> metadata = new HashMap<String, String>();
                     metadata.put("warning", "Results won't be ordered because there "
                         + "was more than one page of results returned.");                
-                    recordList.setMetadata (metadata);
 
                     logger.debug("Warning: Results won't be ordered because there "
                         + "was more than one page of results returned.");
@@ -307,12 +368,128 @@ public class KineticCoreAdapter implements BridgeAdapter {
             }
         }
         
-        return recordList;
+        return new RecordList(request.getFields(), records, metadata);
     }
 
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
+    protected Mapping getMapping (String structure) throws BridgeError{
+        Mapping mapping = MAPPINGS.get(structure);
+        if (mapping == null) {
+            throw new BridgeError("Invalid Structure: '" 
+                + structure + "' is not a valid structure");
+        }
+        return mapping;
+    }
+    
+    protected String getUrl (BridgeRequest request, Mapping mapping,
+        List<NameValuePair> parameters) {
+        
+        return String.format("%s/app/api/v1/%s?%s", spaceUrl, 
+            parser.parsePath(request.getQuery()), buildQuery(parameters, 
+                mapping.implicitIncludes));
+    }
+    
+    protected List<Record> createRecords(List<String> fields, JSONArray array) 
+        throws BridgeError {
+      // For each of the API result item
+       return (List<Record>) array.stream()
+        .map(item -> createRecord(fields, (JSONObject) item))
+        .collect(Collectors.toList());
+    }
+    
+    private Record createRecord(List<String> fields, JSONObject item) {
+        Map<String,Object> record = new LinkedHashMap<String,Object>();
+        
+        fields.forEach(field -> {
+            Matcher matcher = NESTED_PATTERN.matcher(field);
+            
+            if (matcher.matches()) {
+                String collectionProperty = matcher.group(1);
+                String collectionKey = matcher.group(2);
+
+                Object collection = item.get(collectionProperty); // "attributes"
+                String value;
+                if (collection instanceof JSONArray) {
+                    value = extract((JSONArray)collection, collectionKey);
+                } else if (collection instanceof JSONObject) {
+                    value = extract((JSONObject)collection, collectionKey);
+                } else {
+                    throw new RuntimeException("Unexpected nested property type for \""+field+"\".");
+                }
+                record.put(field, value);
+            } else {
+                record.put(field, extract(item, field));
+            }
+        });
+        
+        return new Record(record);
+    }
+        
+    private String extract(JSONArray object, String key) {
+        Object matchingItem = object.stream()
+            .filter(jsonObject -> jsonObject instanceof JSONObject)
+            .filter(jsonObject -> ((JSONObject)jsonObject).containsKey("name") 
+                && ((JSONObject)jsonObject).containsKey("values")
+            )
+            .filter(jsonObject -> 
+                key.equals(((JSONObject)jsonObject).get("name"))
+            )
+            .findFirst()
+            .orElse(null);
+        return extract((JSONObject)matchingItem, "values");
+    }
+
+    private String extract(JSONObject object, String field) {
+        Object value = (object == null) ? null : object.get(field);
+
+        String result;
+        if (value == null) {
+            result = null;
+        } else if (value instanceof JSONObject) {
+            result = ((JSONObject)value).toJSONString();
+        } else if (value instanceof JSONArray) {
+            result = ((JSONArray)value).toJSONString();
+        } else {
+            result = value.toString();
+        }
+        return result;
+    }
+    
+    protected String buildQuery (List<NameValuePair> parameters, 
+        Set<String> implicitIncludes) {
+        
+        Map<String,NameValuePair> processedParameters = parameters.stream()
+            .map(parameter -> {
+                NameValuePair result;
+                if ("include".equals(parameter.getName())) {
+                    Set<String> includeSet = new LinkedHashSet<>();
+                    includeSet.addAll(Arrays.asList(parameter.getValue()
+                        .split("\\s*,\\s*")));
+                    
+                    includeSet.addAll(implicitIncludes);
+                    result = new BasicNameValuePair("include", 
+                        includeSet.stream().collect(Collectors.joining(",")));
+                } else {
+                    result = parameter;
+                }
+                return result;
+            })
+            .collect(Collectors.toMap(item -> item.getName(), item -> item));
+        if (!processedParameters.containsKey("include")) {
+            processedParameters.put("include", new BasicNameValuePair("include",
+                implicitIncludes.stream().collect(Collectors.joining(","))));
+        }
+        if (!processedParameters.containsKey("limit")) {
+            processedParameters.put("limit", new BasicNameValuePair("limit",
+                "1000"));
+        }
+        
+        return URLEncodedUtils.format(processedParameters.values(),
+            Charset.forName("UTF-8"));
+    } 
+    
     // TODO: confirm that direction in order metadata matches qualification mapping. 
     protected boolean paginationSupported(Mapping mapping, String queryString, 
         String paginationField) {
@@ -370,24 +547,6 @@ public class KineticCoreAdapter implements BridgeAdapter {
         }
         
         return supported;
-    }
-    
-    protected String parseParameter(String queryString, String parameter) {
-         //Pattern to get all indexs in query.
-        Pattern MY_PATTERN = Pattern.compile("[\\?\\&](" + parameter + "([^\\&]+))");
-        Matcher m = MY_PATTERN.matcher(queryString);
-        String result = null;
-        while (m.find()) {
-            result = m.group(2);
-        }
-        return result;
-    }
-    
-    protected List<String> getIndexs(String queryString) {
-         String indexs = parseParameter(queryString, "index");
-        
-        //return a List of indexs.
-        return Arrays.asList(indexs.split("\\s*,\\s*"));
     }
     
     private String substituteQueryParameters(BridgeRequest request) throws BridgeError {

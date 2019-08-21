@@ -36,19 +36,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public Class getAdapterClass() {
         return KineticCoreAdapter.class;
     }
-    
-    @Test
-    public void test_simpleCount() throws Exception {
-        BridgeRequest request = new BridgeRequest();
-        request.setStructure("Forms");
-        request.setQuery("kapps/services/forms/cleaning");
-        
-        Count count = getAdapter().count(request);
-        int value = count.getValue();
-        
-        Assert.assertEquals(1,value);
-    }
-    
+
     @Test
     public void test_invalidBridgeConfiguration() {
         BridgeError error = null;
@@ -107,21 +95,24 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         assertNotNull(error);
     }
     
-    @Test
-    public void test_blankFields() {
-        BridgeError error = null;
-        
-        BridgeRequest request = new BridgeRequest();
-        request.setStructure(getStructure());
-        request.setFields(new ArrayList());
-        request.setQuery(getSingleValueQuery());
-        
-        try {
-            getAdapter().retrieve(request);
-        } catch (BridgeError e) { error = e; }
-        
-        assertNotNull(error);
-    }
+    /* The need for this test must be evaluated.  What should the behavior of the
+     * adapter be if no feilds are provided?
+     */
+//    @Test
+//    public void test_blankFields() {
+//        BridgeError error = null;
+//        
+//        BridgeRequest request = new BridgeRequest();
+//        request.setStructure(getStructure());
+//        request.setFields(new ArrayList());
+//        request.setQuery(getSingleValueQuery());
+//        
+//        try {
+//            getAdapter().retrieve(request);
+//        } catch (BridgeError e) { error = e; }
+//        
+//        assertNotNull(error);
+//    }
 
     @Test
     public void test_retrieve_form() throws Exception {
@@ -163,7 +154,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Count count = getAdapter().count(request);
-        String x = "1";
+        Assert.assertTrue(count.getValue() == 0);
     }
     
     @Test
@@ -258,7 +249,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         Count count = getAdapter().count(request);
-        String x = "1";
+        Assert.assertTrue(count.getValue() > 0);
     }
   
     @Test
@@ -278,13 +269,13 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
     public void test_search_users() throws Exception {
         BridgeRequest request = new BridgeRequest();
         request.setStructure("Users");
-        request.setQuery("users?limit=10&q=username=*\"c\" AND enabled=\"true\"");
+        request.setQuery("users?limit=10&q=username=*\"cad\" AND enabled=\"true\"");
         
         List<String> list = Arrays.asList("displayName", "email");
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -319,18 +310,18 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         String x = "1";
     }
     
-    @Test
-    public void test_retrieve_teams() throws Exception {
-        BridgeRequest request = new BridgeRequest();
-        request.setStructure("Teams");
-        request.setQuery("teams/c1ec1d62eafad32ca16fe4df49b9ca2f");
-        
-        List<String> list = Arrays.asList("name", "description");
-        request.setFields(list);
-        
-        Record record = getAdapter().retrieve(request);
-        Assert.assertTrue(record.getRecord().size() > 0);
-    }
+//    @Test
+//    public void test_retrieve_teams() throws Exception {
+//        BridgeRequest request = new BridgeRequest();
+//        request.setStructure("Teams");
+//        request.setQuery("teams/c1ec1d62eafad32ca16fe4df49b9ca2f");
+//        
+//        List<String> list = Arrays.asList("name", "description");
+//        request.setFields(list);
+//        
+//        Record record = getAdapter().retrieve(request);
+//        Assert.assertTrue(record.getRecord().size() > 0);
+//    }
     
     @Test
     public void test_search_teams() throws Exception {
@@ -465,104 +456,5 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         
         Count count = getAdapter().count(request);
         Assert.assertTrue(count.getValue() > 0);
-    }
-    
-    @Test
-    public void test_index_parse() throws Exception {
-        List<String> expectedResult = new ArrayList<String>();
-        expectedResult.add("values[Related Id]");
-        expectedResult.add("values[Status]");
-        
-        KineticCoreAdapter adapterClass = new KineticCoreAdapter();
-        List<String> result = adapterClass
-            .getIndexs("formSlug=milestones&limit=1000&index=values[Related Id],"
-                + "values[Status]&q=values[Status]=\"Active\"");
-        
-        Assert.assertTrue(result.containsAll(expectedResult));
-    }
-    
-        
-    @Test
-    public void test_index_parse_white_space() throws Exception {
-        List<String> expectedResult = new ArrayList<String>();
-        expectedResult.add("values[Related Id]");
-        expectedResult.add("values[Status]");
-        
-        KineticCoreAdapter adapterClass = new KineticCoreAdapter();
-        List<String> result = adapterClass
-            .getIndexs("formSlug=milestones&limit=1000&index=values[Related Id] , "
-                + "values[Status]&q=values[Status]=\"Active\"");
-        
-        Assert.assertTrue(result.containsAll(expectedResult));
-    }
-    
-    @Test
-    public void test_paginationSupported_3() throws Exception {
-        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
-        
-        KineticCoreAdapter.Mapping mapping =
-            new KineticCoreAdapter.Mapping("Datastore Submissions", "submissions",
-                "submission", Arrays.asList("details", "attributes"));
-        
-        List<String> paginationFields = new ArrayList<>();
-        LinkedHashMap<String, String> sortOrderItems = new LinkedHashMap<>();
-  
-        mapping.setPaginationFields(paginationFields);      
-        paginationFields.add("values[Status]");
-        sortOrderItems.put("values[Status]","ASC");
-        
-        // Test index and order fields match
-        boolean supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
-        Assert.assertTrue(supported);
-        
-        // Test additional indexs and order fields with same direction
-        paginationFields.add("values[Related Id]");
-        sortOrderItems.put("values[Related Id]","ASC");
-        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
-        Assert.assertTrue(supported);
-        
-        // Test that mixed direction fails
-        sortOrderItems.replace("values[Related Id]", "DESC");
-        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
-        Assert.assertFalse(supported);
-        
-        // Test that mismatched list sizes fails
-        sortOrderItems.remove("values[Related Id]");
-        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
-        Assert.assertFalse(supported);
-        
-        // Test that index out of order fails
-        sortOrderItems.clear();
-        sortOrderItems.put("values[Related Id]","ASC");
-        sortOrderItems.put("values[Status]","ASC");
-        supported = kCoreAdp.paginationSupported(mapping, sortOrderItems);
-        Assert.assertFalse(supported);
-    }
-    
-    @Test
-    public void test_paginationSupported_1() throws Exception {
-        KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
-        
-        KineticCoreAdapter.Mapping mapping =
-            new KineticCoreAdapter.Mapping("Submissions", "submissions", 
-            "submission", Arrays.asList("values","details"),
-            Arrays.asList("closedAt","createdAt","submittedAt","updatedAt"));
-        
-        String queryString = "kapps/services/submissions?timeline=createdAt&direction=DESC";
-        
-        List<String> paginationFields = new ArrayList<>();
-        mapping.setPaginationFields(paginationFields);      
-        paginationFields.add("createdAt");
-        
-        // Test paginatable field is included in query string
-        boolean supported = kCoreAdp.paginationSupported(mapping, queryString,
-            "createdAt");
-        Assert.assertTrue(supported);
-        
-        // Test that query string has no paginatable field returns false
-        queryString = "kapps/services/submissions";
-        supported = kCoreAdp.paginationSupported(mapping, queryString,
-            "createdAt");
-        Assert.assertFalse(supported);
     }
 }
