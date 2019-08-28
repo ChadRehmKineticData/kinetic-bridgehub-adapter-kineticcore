@@ -31,47 +31,6 @@ import static org.junit.Assert.*;
 public class KineticCoreHelperTest {
     
     @Test
-    public void test_build_query() throws Exception {
-        List<NameValuePair> parameters = new ArrayList<NameValuePair>();
-        Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreAdapter helper = new KineticCoreAdapter();
-       
-        parameters.add(new BasicNameValuePair("include", "fields"));
-        implicitIncludes.add("details");
-        implicitIncludes.add("attributes");
-        
-        String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals("include=fields%2Cdetails%2Cattributes&limit=1000", query);
-    }
-    
-    @Test
-    public void test_build_empty_param() throws Exception {
-        List<NameValuePair> parameters = new ArrayList<NameValuePair>();
-        Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreAdapter helper = new KineticCoreAdapter();
-       
-        implicitIncludes.add("details");
-        implicitIncludes.add("attributes");
-        
-        String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals("include=details%2Cattributes&limit=1000", query);
-    }    
-    
-    // This should never happen in the use of the adpater.  Implicit includes
-    //are set in the adapter.
-    @Test
-    public void test_build_empty_include() throws Exception {
-        List<NameValuePair> parameters = new ArrayList<NameValuePair>();
-        Set<String> implicitIncludes = new LinkedHashSet<String>();
-        KineticCoreAdapter helper = new KineticCoreAdapter();
-       
-        parameters.add(new BasicNameValuePair("include", "fields"));
-        
-        String query = helper.buildQuery(parameters, implicitIncludes);
-        assertEquals("include=fields&limit=1000", query);
-    }
-    
-    @Test
     public void test_paginationSupported_3() throws Exception {
         KineticCoreAdapter kCoreAdp = new KineticCoreAdapter();
         

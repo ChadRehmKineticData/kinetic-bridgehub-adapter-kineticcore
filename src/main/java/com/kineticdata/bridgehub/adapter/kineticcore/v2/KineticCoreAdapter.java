@@ -16,15 +16,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -217,9 +213,16 @@ public class KineticCoreAdapter implements BridgeAdapter {
         
         Mapping mapping = getMapping(request.getStructure());
         
+        Map<String, String> parameters = parser.getParameters(request.getQuery());
+        
+        if (!parameters.containsKey("limit")) {
+            parameters.put("limit", "1000");
+        }
+        
+        Map<String, NameValuePair> parameterMap = buildNameValuePairMap(parameters);
+        
         String responce = coreApiHelper.executeRequest(request, 
-            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
-            parser);
+            getUrl(request, parameterMap), parser);
         
         Map<String,String> metadata = new LinkedHashMap<String, String>();
         int count = 0;
@@ -243,7 +246,7 @@ public class KineticCoreAdapter implements BridgeAdapter {
 
             metadata.put("pageToken",nextPageToken);
         } catch (Exception e) {
-            
+            throw new BridgeError("There was an error Parsing the responce");
         }
         
         return new Count(count, metadata);
@@ -255,9 +258,14 @@ public class KineticCoreAdapter implements BridgeAdapter {
 
         Mapping mapping = getMapping(request.getStructure());
 
+        Map<String, String> parameters = parser.getParameters(request.getQuery());
+
+        parameters = addImplicitIncludes(parameters, mapping.getImplicitIncludes());
+        
+        Map<String, NameValuePair> parameterMap = buildNameValuePairMap(parameters);
+        
         String responce = coreApiHelper.executeRequest(request, 
-            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
-            parser);
+            getUrl(request, parameterMap), parser);
         
         JSONObject singleResult = new JSONObject();
         
@@ -277,27 +285,81 @@ public class KineticCoreAdapter implements BridgeAdapter {
                 singleResult = (JSONObject)json.get(mapping.getSingular());
             }
         } catch (Exception e) {
-            
+            throw new BridgeError("There was an error Parsing the responce");
         }
         
         return createRecord(request.getFields(), singleResult);
     }
 
+    /* 
+     * The order of operation for sorting result:
+     *  if No order metadata return results natural sort order.
+     *  else
+     *      Check if pagination is supported by the server.
+     *      if Supported return results sorted from server.
+     *          else
+     *          if nextpagetoken == null
+     *              Sort in the bridge
+     *          else
+     *              Set warning on metadata that results are not sorted.
+     *              Return results in natural sort order. 
+     */
     @Override
     public RecordList search(BridgeRequest request) throws BridgeError {
         request.setQuery(substituteQueryParameters(request));
         
         Mapping mapping = getMapping(request.getStructure());
         
-        String queryString = parser.parse(request.getQuery(), 
-            request.getParameters());
- 
+        Map<String, String> parameters = parser.getParameters(request.getQuery());
+        
+        LinkedHashMap<String,String> sortOrderItems = null; 
+        
+        boolean paginationSupported = false;
+        if (request.getMetadata("order") != null) {
+            
+            sortOrderItems = getSortOrderItems(
+                BridgeUtils.parseOrder(request.getMetadata("order")));
+            
+            if (request.getStructure() == "Datastore Submissions") { 
+
+                mapping.setPaginationFields(
+                    Arrays.asList(parameters.get("index").split("\\s*,\\s*"))
+                );
+                paginationSupported = paginationSupported(mapping, sortOrderItems);  
+
+            } else if (request.getStructure() == "Submissions" 
+                || request.getStructure() == "Users"
+                || request.getStructure() == "Teams") {
+
+                if (!(sortOrderItems.size() == 1)) {
+                    paginationSupported = paginationSupported(mapping, 
+                        request.getQuery(),
+                        // Get the only item in the map.
+                        sortOrderItems.entrySet().iterator().next().getKey());
+                }
+
+            } else {
+                paginationSupported = paginationSupported(mapping, 
+                    request.getQuery());
+            }
+        }
+        
+        String limit = null;
+        if (!paginationSupported || !parameters.containsKey("limit")) {    
+            limit = parameters.get("limit");
+            parameters.put("limit", "1000");
+        }
+        
+        parameters = addImplicitIncludes(parameters, mapping.getImplicitIncludes());
+        
+        Map<String, NameValuePair> parameterMap = buildNameValuePairMap(parameters);
+        
         String responce = coreApiHelper.executeRequest(request, 
-            getUrl(request, mapping, parser.parseQuery(request.getQuery())),
-            parser);
+            getUrl(request, parameterMap), parser);
 
         List<Record> records = new ArrayList<Record>();
-        Map<String,String> metadata = new LinkedHashMap<String,String>();
+        Map<String, String> metadata = request.getMetadata() != null ?
+                request.getMetadata() : new HashMap<>();
         
         try {
             JSONObject json = (JSONObject)JSONValue.parse(responce);
@@ -311,60 +373,56 @@ public class KineticCoreAdapter implements BridgeAdapter {
                 null));
             metadata.put("pageToken", nextPageToken);
         } catch (Exception e) {
-            
+            throw new BridgeError("There was an error Parsing the responce");
         }
         
-        boolean paginationSupported = false;
-        if (request.getMetadata("order") != null) {
-            // get a List of the sort order items.
-            Map<String,String> uncastSortOrderItems =
-                BridgeUtils.parseOrder(request.getMetadata("order"));
-
-            /* results of parseOrder does not allow for a structure that 
-             * guarantees order.  Casting is required to preserver order.
-             */
-            if (!(uncastSortOrderItems instanceof LinkedHashMap)) {
-                throw new IllegalArgumentException("MESSAGE");
-            }
-            LinkedHashMap<String,String> sortOrderItems =
-                (LinkedHashMap)uncastSortOrderItems;
-            
-            Map <String, String> parameters = parser.getParameters(queryString);
-            if (request.getStructure() == "Datastore Submissions") { 
-
-                mapping.setPaginationFields(
-                    Arrays.asList(parameters.get("index").split("\\s*,\\s*"))
-                );
-                paginationSupported = paginationSupported(mapping, sortOrderItems);  
-
-            } else if (request.getStructure() == "Submissions" 
-                || request.getStructure() == "Users"
-                || request.getStructure() == "Teams") {
-
-                if (!(sortOrderItems.size() == 1)) {
-                    paginationSupported = paginationSupported(mapping, queryString, 
-                        // Get the only item in the map.
-                        sortOrderItems.entrySet().iterator().next().getKey());
+        
+        // If core side sorting isn't supported and order is required.
+        if (!paginationSupported && request.getMetadata("order") != null) {
+            // If all the records have been retrived sort bridge side.
+            if ( metadata.get("pageToken") != null) {
+                
+                int index = 0;
+                int offset = records.size();
+                if (limit != null) {
+                    
+                    Integer currentPage = 0;
+                    if( metadata.get("currentPage") != null) {
+                        try {
+                            currentPage =
+                                Integer.parseInt(metadata.get("currentPage"));
+                        } catch (NumberFormatException e) {
+                            throw new BridgeError("currentPage metadata must be"
+                                + "an Integer");
+                        }
+                    }
+                    
+                    metadata.put("page", limit);
+                    // increment page count if this isn't the first request.
+                    metadata.put("currentPage", currentPage > 0 ?
+                        "1" : Integer.toString(currentPage + 1));
+                    
+                    try {
+                        offset = Integer.parseInt(limit);
+                    } catch  (NumberFormatException e) {
+                        throw new BridgeError("limit metadata must be"
+                            + "an Integer");
+                    }
+                    index = (currentPage * offset);
+                    offset = index + offset;
                 }
+                
+                KappSubmissionComparator comparator =
+                    new KappSubmissionComparator(sortOrderItems);
+                Collections.sort(records, comparator);
+                records = records.subList(index, (offset - 1));
 
             } else {
-                paginationSupported = paginationSupported(mapping, queryString);
-            }
-            
-            if (!paginationSupported) {            
-                // Sort the records if they are all returned.
-                if ( metadata.get("nextPageToken") == null) {
+                metadata.put("warning", "Results won't be ordered because there "
+                    + "was more than one page of results returned.");                
 
-                    KappSubmissionComparator comparator =
-                        new KappSubmissionComparator(sortOrderItems);
-                    Collections.sort(records, comparator);
-                } else {
-                    metadata.put("warning", "Results won't be ordered because there "
-                        + "was more than one page of results returned.");                
-
-                    logger.debug("Warning: Results won't be ordered because there "
-                        + "was more than one page of results returned.");
-                }
+                logger.debug("Warning: Results won't be ordered because there "
+                    + "was more than one page of results returned.");
             }
         }
         
@@ -374,6 +432,47 @@ public class KineticCoreAdapter implements BridgeAdapter {
     /*---------------------------------------------------------------------------------------------
      * HELPER METHODS
      *-------------------------------------------------------------------------------------------*/
+    protected Map<String, NameValuePair> buildNameValuePairMap(Map<String, String> parameters) {
+        Map<String, NameValuePair> parameterMap = new HashMap<>();
+
+        parameters.forEach((key, value) -> {
+            parameterMap.put(key, new BasicNameValuePair(key, value));
+        });
+        
+        return parameterMap;
+    }
+         
+    protected Map<String, String> addImplicitIncludes(Map<String, String> parameters,
+        Set<String> implicitIncludes) {
+        
+        if (parameters.containsKey("include")) {
+            Set<String> includeSet = new LinkedHashSet<>();
+            includeSet.addAll(Arrays.asList(parameters.get("include")
+                .split("\\s*,\\s*")));
+
+            includeSet.addAll(implicitIncludes);
+        } else {
+            parameters.put("include", 
+                implicitIncludes.stream().collect(Collectors.joining(",")));
+        }
+        
+        return parameters;
+    }
+    
+    private LinkedHashMap<String, String> 
+        getSortOrderItems (Map<String, String> uncastSortOrderItems)
+        throws IllegalArgumentException{
+        
+        /* results of parseOrder does not allow for a structure that 
+         * guarantees order.  Casting is required to preserver order.
+         */
+        if (!(uncastSortOrderItems instanceof LinkedHashMap)) {
+            throw new IllegalArgumentException("MESSAGE");
+        }
+        
+        return (LinkedHashMap)uncastSortOrderItems;
+    }
+        
     protected Mapping getMapping (String structure) throws BridgeError{
         Mapping mapping = MAPPINGS.get(structure);
         if (mapping == null) {
@@ -383,20 +482,13 @@ public class KineticCoreAdapter implements BridgeAdapter {
         return mapping;
     }
     
-    protected String getUrl (BridgeRequest request, Mapping mapping,
-        List<NameValuePair> parameters) {
-        
-        return String.format("%s/app/api/v1/%s?%s", spaceUrl, 
-            parser.parsePath(request.getQuery()), buildQuery(parameters, 
-                mapping.implicitIncludes));
-    }
-    
     protected List<Record> createRecords(List<String> fields, JSONArray array) 
         throws BridgeError {
-      // For each of the API result item
-       return (List<Record>) array.stream()
-        .map(item -> createRecord(fields, (JSONObject) item))
-        .collect(Collectors.toList());
+        
+        // For each of the API result item
+        return (List<Record>) array.stream()
+            .map(item -> createRecord(fields, (JSONObject) item))
+            .collect(Collectors.toList());
     }
     
     private Record createRecord(List<String> fields, JSONObject item) {
@@ -457,38 +549,13 @@ public class KineticCoreAdapter implements BridgeAdapter {
         return result;
     }
     
-    protected String buildQuery (List<NameValuePair> parameters, 
-        Set<String> implicitIncludes) {
+    protected String getUrl (BridgeRequest request,
+        Map<String, NameValuePair> parameters) {
         
-        Map<String,NameValuePair> processedParameters = parameters.stream()
-            .map(parameter -> {
-                NameValuePair result;
-                if ("include".equals(parameter.getName())) {
-                    Set<String> includeSet = new LinkedHashSet<>();
-                    includeSet.addAll(Arrays.asList(parameter.getValue()
-                        .split("\\s*,\\s*")));
-                    
-                    includeSet.addAll(implicitIncludes);
-                    result = new BasicNameValuePair("include", 
-                        includeSet.stream().collect(Collectors.joining(",")));
-                } else {
-                    result = parameter;
-                }
-                return result;
-            })
-            .collect(Collectors.toMap(item -> item.getName(), item -> item));
-        if (!processedParameters.containsKey("include")) {
-            processedParameters.put("include", new BasicNameValuePair("include",
-                implicitIncludes.stream().collect(Collectors.joining(","))));
-        }
-        if (!processedParameters.containsKey("limit")) {
-            processedParameters.put("limit", new BasicNameValuePair("limit",
-                "1000"));
-        }
-        
-        return URLEncodedUtils.format(processedParameters.values(),
-            Charset.forName("UTF-8"));
-    } 
+        return String.format("%s/app/api/v1/%s?%s", spaceUrl, 
+            parser.parsePath(request.getQuery()), 
+            URLEncodedUtils.format(parameters.values(), Charset.forName("UTF-8")));
+    }
     
     // TODO: confirm that direction in order metadata matches qualification mapping. 
     protected boolean paginationSupported(Mapping mapping, String queryString, 

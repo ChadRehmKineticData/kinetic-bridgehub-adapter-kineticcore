@@ -41,36 +41,6 @@ public class KineticCoreQualificationParserTest {
         
         assertEquals("kapps/services/forms",  path);
     }
-
-    @Test
-    public void test_parseQuery() throws Exception {
-        
-        List<NameValuePair> parameters = parser.parseQuery(
-            "kapps/services/forms?q=name=*\"c\" AND status=\"Active\""
-        );
-        
-        // Build the parameter map
-        List<NameValuePair> list = new ArrayList<NameValuePair>();
-        list.add(new BasicNameValuePair("q", "name=*\"c\" AND status=\"Active\""));
-        
-        assertEquals(list,  parameters);
-    }
-    
-        @Test
-    public void test_parseQuery_multi_param() throws Exception {
-        
-        List<NameValuePair> parameters = parser.parseQuery(
-            "kapps/services/forms?limit=100&q=name=*\"c\" AND status=\"Active\"&"
-        );
-        
-        // Build the parameter map
-        List<NameValuePair> list = new ArrayList<NameValuePair>();
-        list.add(new BasicNameValuePair("q", "name=*\"c\" AND status=\"Active\""));
-        list.add(new BasicNameValuePair("limit", "100"));
-        
-        assertTrue(list.size() == parameters.size() 
-            && list.containsAll(parameters) && parameters.containsAll(list));
-    }
     
     @Test
     public void test_parse_ParameterWithBackslash() throws Exception {

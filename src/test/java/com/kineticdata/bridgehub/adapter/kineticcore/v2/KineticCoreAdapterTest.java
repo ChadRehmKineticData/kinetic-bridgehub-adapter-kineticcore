@@ -141,7 +141,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -168,7 +168,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
    
     @Test
@@ -182,7 +182,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -210,7 +210,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -236,7 +236,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -294,7 +294,9 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setQuery("users?limit=20&q=username=*\"c\" AND enabled=\"true\"");
         RecordList records3 = getAdapter().search(request);
         
-        String x = "1";
+        Assert.assertTrue(records1.getRecords().size() > 0);
+        Assert.assertTrue(records2.getRecords().size() > 0);
+        Assert.assertTrue(records3.getRecords().size() > 0);
     }
     
     @Test
@@ -333,7 +335,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -372,7 +374,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -411,7 +413,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -424,7 +426,7 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test
@@ -442,7 +444,52 @@ public class KineticCoreAdapterTest extends BridgeAdapterTestBase {
         request.setFields(list);
         
         RecordList records = getAdapter().search(request);
-        String x = "1";
+        Assert.assertTrue(records.getRecords().size() > 0);
+    }
+    
+    @Test
+    public void test_search_submissions_order_2() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/forms/aaa-test-form/submissions");
+        
+        Map <String, String> metadata = new HashMap<>();
+        metadata.put("order", "<%=field[\"values[Dropdown Field]\"]%>:DESC"
+            + ",<%=field[\"values[Radio Button]\"]%>:ASC");
+        
+        request.setMetadata(metadata);
+        
+        List<String> fields = Arrays.asList("createdAt", "label",
+            "values[Radio Button]","values[Dropdown Field]");
+        request.setFields(fields);
+        
+        RecordList records = getAdapter().search(request);
+        Assert.assertTrue(records.getRecords().size() > 0);
+    }
+    
+    @Test
+    public void test_search_submissions_order_limit() throws Exception {
+        BridgeRequest request = new BridgeRequest();
+        request.setStructure("Submissions");
+        request.setQuery("kapps/services/forms/aaa-test-form/submissions?"
+                + "coreState=<%=parameter[\"Core State\"]%>&limit=10");
+        
+        Map parameters = new HashMap();
+        parameters.put("Core State", "Submitted");
+        request.setParameters(parameters);
+        
+        Map <String, String> metadata = new HashMap<>();
+        metadata.put("order", "<%=field[\"values[Dropdown Field]\"]%>:DESC"
+            + ",<%=field[\"values[Radio Button]\"]%>:ASC");
+        
+        request.setMetadata(metadata);
+        
+        List<String> fields = Arrays.asList("createdAt", "label",
+            "values[Radio Button]","values[Dropdown Field]");
+        request.setFields(fields);
+        
+        RecordList records = getAdapter().search(request);
+        Assert.assertTrue(records.getRecords().size() > 0);
     }
     
     @Test

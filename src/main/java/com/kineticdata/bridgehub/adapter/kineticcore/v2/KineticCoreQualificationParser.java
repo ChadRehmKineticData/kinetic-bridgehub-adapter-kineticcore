@@ -18,34 +18,6 @@ public class KineticCoreQualificationParser extends QualificationParser {
     protected static final org.slf4j.Logger logger 
         = LoggerFactory.getLogger(KineticCoreAdapter.class);
     
-    protected List<NameValuePair> parseQuery (String queryString)
-        throws BridgeError {
-        
-        // Split the query from the rest of the string
-        String[] parts = queryString.split("[?]",2);
-        
-        List<NameValuePair> queryList = new ArrayList<>();
-
-        if (parts.length > 1) {
-            // Split into individual queries by splitting on the & between each 
-            // distinct query
-            String[] queries = parts[1].split("&(?=[^&]*?=)");
-            for (String query : queries) {
-                // Split the query on the = to determine the field/value key-pair. 
-                // Anything before the first = is considered to be the field and 
-                // anything after (including more = signs if there are any) is 
-                // considered to be part of the value
-                String[] str_array = query.split("=",2);
-                String field = str_array[0].trim();
-                String value = str_array[1].trim();
-
-                queryList.add( new BasicNameValuePair(field, value.trim()));
-            }
-        }
-        
-        return queryList;
-    }
-    
     protected Map<String, String> getParameters (String queryString)
         throws BridgeError {
         

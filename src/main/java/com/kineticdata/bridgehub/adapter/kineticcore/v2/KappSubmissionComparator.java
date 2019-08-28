@@ -28,8 +28,8 @@ public class KappSubmissionComparator implements Comparator<Record> {
         String fieldName = sortOrderItem.getKey();
         boolean isAscending = "asc".equals(sortOrderItem.getValue().toLowerCase());
         
-        String r1Value = normalize(r1.getValue(fieldName).toString());
-        String r2Value = normalize(r2.getValue(fieldName).toString());
+        String r1Value = normalize(r1.getValue(fieldName));
+        String r2Value = normalize(r2.getValue(fieldName));
         
         // Order based on field direction specified
         int fieldComparison = (isAscending)
@@ -44,12 +44,12 @@ public class KappSubmissionComparator implements Comparator<Record> {
     return result;
   }
 
-  protected String normalize(String string) {
+  protected String normalize(Object string) {
     String result;
-    if (string == null) {
+    if (String.valueOf(string) == null) {
       result = "";
     } else {
-      result = string.toLowerCase();
+      result = String.valueOf(string);
     }
     return result;
   }
